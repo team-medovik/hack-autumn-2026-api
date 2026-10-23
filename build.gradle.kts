@@ -1,4 +1,3 @@
-import nu.studer.gradle.jooq.JooqGenerate
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 import org.jooq.meta.jaxb.Database
 import org.jooq.meta.jaxb.Generate
@@ -18,6 +17,7 @@ group = "ru.medovik.hack2026"
 version = "1.0.0"
 
 val jooqVersion = "3.21.5"
+val jwtVersion = "0.12.6"
 
 val jooqSchemaScript = "src/main/resources/sql/init-tables.sql"
 
@@ -44,6 +44,12 @@ dependencies {
 
     // Web
     implementation("org.springframework.boot:spring-boot-starter-webmvc")
+
+    // Security and JWT
+    implementation("org.springframework.boot:spring-boot-starter-security")
+    implementation("io.jsonwebtoken:jjwt-api:$jwtVersion")
+    runtimeOnly("io.jsonwebtoken:jjwt-impl:$jwtVersion")
+    runtimeOnly("io.jsonwebtoken:jjwt-jackson:$jwtVersion")
 
     // Flyway
     implementation("org.flywaydb:flyway-core")
@@ -155,10 +161,6 @@ jooq {
             }
         }
     }
-}
-
-tasks.named<JooqGenerate>("generateJooq") {
-    allInputsDeclared.set(true)
 }
 
 tasks.withType<KotlinCompile>().configureEach {

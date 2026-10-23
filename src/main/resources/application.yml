@@ -7,6 +7,18 @@ spring:
   profiles:
     default: dev
 
+app:
+  auth:
+    # 256-битный ключ в Base64. В каждом окружении переопределяйте через APP_AUTH_JWT_SECRET.
+    jwt-secret: ${APP_AUTH_JWT_SECRET:ZGV2ZWxvcG1lbnQtb25seS1qd3Qtc2VjcmV0LW11c3QtYmUtYXQtbGVhc3QtMzItYnl0ZXM=}
+    access-token-ttl: ${APP_AUTH_ACCESS_TOKEN_TTL:15m}
+    refresh-token-ttl: ${APP_AUTH_REFRESH_TOKEN_TTL:30d}
+    secure-cookie: ${APP_AUTH_SECURE_COOKIE:false}
+    # Указанные здесь сотрудники создаются при запуске. APP_AUTH_ENVIRONMENT_EMPLOYEES_0_* добавляет второй источник.
+    # Пример: [{ email: admin@example.com, password: change_me, role: ADMIN }]
+    employees: []
+    environment-employees: []
+
 springdoc:
   api-docs:
     enabled: true
