@@ -7,8 +7,8 @@ import ru.medovik.hack2026.api.properties.AuthProperties
 
 @SpringBootApplication
 @EnableConfigurationProperties(AuthProperties::class)
-class TeamUpApplication
+class Hack2026Application
 
 fun main(args: Array<String>) {
-    runApplication<TeamUpApplication>(*args)
+    runApplication<Hack2026Application>(*args)
 }
