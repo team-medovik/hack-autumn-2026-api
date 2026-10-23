@@ -1,0 +1,31 @@
+services:
+  hack-autumn-2026-api:
+    build:
+      dockerfile: ./Dockerfile
+      context: ./
+    restart: always
+    image: hack-autumn-2026-api
+    container_name: hack-autumn-2026-api
+    env_file:
+      - ./.env
+    volumes:
+      - /home/kinoko/logs/teamup/hack-autumn-2026-api:/logs
+    networks:
+      - backend
+    ports:
+      - "33000:33000"
+    expose:
+      - "33001"
+    labels:
+      observability.metrics: "true"
+      observability.logs: "true"
+      observability.port: "33001"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  backend:
+    external: true

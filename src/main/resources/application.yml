@@ -1,0 +1,37 @@
+logging:
+  config: 'classpath:log4j2.yml'
+
+spring:
+  application:
+    name: hack-autumn-2026-api
+  profiles:
+    default: dev
+
+springdoc:
+  api-docs:
+    enabled: true
+    path: /api/v1/docs
+  swagger-ui:
+    csrf:
+      enabled: true
+    path: /api/v1/swagger
+
+management:
+  server:
+    port: 33001
+  endpoints:
+    web:
+      exposure:
+        include:
+          - health
+          - info
+          - prometheus
+  endpoint:
+    health:
+      show-details: never
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
+server:
+  port: 33000
