@@ -43,7 +43,8 @@ class CustomerRiskAggregator {
             servicesAtRisk = atRisk.size,
             portfolioShareAtRisk = if (live.isEmpty()) 0.0 else atRisk.size.toDouble() / live.size,
             nearestRiskAt = atRisk.mapNotNull { it.nextCriticalAt }.minOrNull(),
-            revenueExposure = services.fold(0L) { sum, service -> Math.addExact(sum, service.revenueExposure) },
+            potentialMonthlyLoss = services.fold(0L) { sum, service -> Math.addExact(sum, service.potentialMonthlyLoss) },
+            horizonPaymentExposure = services.fold(0L) { sum, service -> Math.addExact(sum, service.horizonPaymentExposure) },
             funding = funding,
             explanations = explanations,
         )

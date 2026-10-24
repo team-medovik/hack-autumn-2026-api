@@ -30,6 +30,7 @@ class RiskEngine(
     ),
     private val balanceSimulator: BalanceSimulator = BalanceSimulator(),
     private val customerAggregator: CustomerRiskAggregator = CustomerRiskAggregator(),
+    private val exposureCalculator: ExposureCalculator = ExposureCalculator(),
 ) {
     init {
         require(features.map { it.code }.distinct().size == features.size) { "Duplicate feature codes" }
@@ -95,6 +96,12 @@ class RiskEngine(
         }
         val rawScore = if (service.status.isLive) contributions.sumOf { it.contribution } else null
         val score = rawScore?.coerceAtMost(100.0)
+        val exposure = exposureCalculator.calculate(
+            service = service,
+            atRisk = score != null && score >= settings.mediumThreshold,
+            evaluationTime = evaluationTime,
+            horizonEnd = evaluationTime.plus(Duration.ofDays(settings.horizonDays.toLong())),
+        )
         val nextCriticalAt = when {
             !service.status.isLive -> null
             service.status == ServiceStatus.PROLONG_WAIT -> service.expiresAt.plus(GRACE_PERIOD)
@@ -112,9 +119,8 @@ class RiskEngine(
             dataQualityWarnings = warnings(service, evaluationTime),
             nextCriticalAt = nextCriticalAt,
             renewalPrice = service.price,
-            revenueExposure = if (score != null && score >= settings.mediumThreshold && context.inHorizon) {
-                service.price
-            } else 0L,
+            potentialMonthlyLoss = exposure.potentialMonthlyLoss,
+            horizonPaymentExposure = exposure.horizonPayments,
         )
     }
 

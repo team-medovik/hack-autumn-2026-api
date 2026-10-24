@@ -1,5 +1,6 @@
 package ru.medovik.hack2026.api.dto.response.risk
 
+import com.fasterxml.jackson.annotation.JsonIgnore
 import java.time.Instant
 
 data class CustomerRiskResult(
@@ -12,7 +13,9 @@ data class CustomerRiskResult(
     val servicesAtRisk: Int,
     val portfolioShareAtRisk: Double,
     val nearestRiskAt: Instant?,
-    val revenueExposure: Long,
+    val potentialMonthlyLoss: Long,
+    @get:JsonIgnore
+    val horizonPaymentExposure: Long,
     val funding: FundingSummary,
     val explanations: List<CustomerExplanation>,
 )

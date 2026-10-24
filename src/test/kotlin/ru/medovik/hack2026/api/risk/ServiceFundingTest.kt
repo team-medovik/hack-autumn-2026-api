@@ -43,7 +43,7 @@ class ServiceFundingTest {
         val serialized = mapper.readTree(mapper.writeValueAsString(funding.renewals.last()))
         assertEquals(600L, serialized.get("shortfall").asLong())
         assertEquals(0.75, serialized.get("shortageStrength").asDouble())
-        assertEquals("expert-f1-f5-v2", result.modelVersion)
+        assertEquals("expert-f1-f5-v3", result.modelVersion)
     }
 
     @Test
@@ -71,11 +71,13 @@ class ServiceFundingTest {
     }
 
     @Test
-    fun `F4 uses the same per-service shortage as F2 for awaiting renewals`() {
+    fun `only F4 uses per-service shortage for awaiting renewals`() {
         val result = calculate()
         assertEquals(0.0, result.feature(317, "F2").contribution)
         assertEquals(0.0, result.feature(317, "F4").contribution)
-        assertEquals(0.75, result.feature(318, "F2").strength)
+        assertFalse(result.feature(317, "F2").applicable)
+        assertFalse(result.feature(318, "F2").applicable)
+        assertEquals(0.0, result.feature(318, "F2").contribution)
         assertEquals(0.75, result.feature(318, "F4").strength)
         assertEquals(22.5, result.feature(318, "F4").contribution)
         assertEquals("600", result.feature(318, "F4").evidence["serviceShortfall"])
