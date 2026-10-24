@@ -190,7 +190,7 @@ tasks.register<JavaExec>("riskReport") {
     description = "Расчёт риска: -PriskInput=JSON -PriskAt=ISO8601 -PriskOutput=JSON -PriskSettings=JSON"
     dependsOn(tasks.named("testClasses"))
     classpath = sourceSets["test"].runtimeClasspath
-    mainClass.set("ru.medovik.hack2026.api.risk.FixtureRiskReportKt")
+    mainClass.set("ru.medovik.hack2026.api.service.risk.FixtureRiskReportKt")
     systemProperty("stdout.encoding", "UTF-8")
     systemProperty("stderr.encoding", "UTF-8")
     val inputPath = providers.gradleProperty("riskInput")
