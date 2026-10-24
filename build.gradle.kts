@@ -44,6 +44,7 @@ dependencies {
 
     // Web
     implementation("org.springframework.boot:spring-boot-starter-webmvc")
+    implementation("org.yaml:snakeyaml")
 
     // Security and JWT
     implementation("org.springframework.boot:spring-boot-starter-security")

@@ -96,6 +96,7 @@ class ModelSettingsService(
      */
     @Transactional
     fun patch(request: PatchModelSettingsRequest, updatedBy: String): ModelSettings {
+        if (request.version < 1L) throw InvalidModelSettingsException("version должен быть положительным")
         repository.lockForSave()
         val current = repository.current()
         if (request.version != current.version) {
