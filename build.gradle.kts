@@ -74,12 +74,6 @@ dependencies {
     // Prometheus
     implementation("org.springframework.boot:spring-boot-starter-actuator")
     runtimeOnly("io.micrometer:micrometer-registry-prometheus")
-
-    // API integration tests run with the real Spring context and an in-memory SQL database.
-    testImplementation("org.springframework.boot:spring-boot-starter-test")
-    testImplementation(kotlin("test-junit5"))
-    testRuntimeOnly("com.h2database:h2")
-    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
 configurations {
