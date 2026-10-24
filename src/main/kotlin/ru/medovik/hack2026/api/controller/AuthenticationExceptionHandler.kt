@@ -13,12 +13,31 @@ import ru.medovik.hack2026.api.exception.UserNotFoundException
 
 @RestControllerAdvice
 class AuthenticationExceptionHandler {
-    @ExceptionHandler(AuthenticationException::class, MissingRequestCookieException::class, HttpMessageNotReadableException::class)
-    fun badRequest(exception: Exception, request: HttpServletRequest) = error(HttpStatus.BAD_REQUEST, "AUTHENTICATION_ERROR", exception.message ?: "Некорректный запрос аутентификации", request)
+    @ExceptionHandler(
+        AuthenticationException::class,
+        MissingRequestCookieException::class,
+        HttpMessageNotReadableException::class
+    )
+    fun badRequest(exception: Exception, request: HttpServletRequest) = error(
+        HttpStatus.BAD_REQUEST,
+        "AUTHENTICATION_ERROR",
+        exception.message ?: "Некорректный запрос аутентификации",
+        request
+    )
 
     @ExceptionHandler(UserNotFoundException::class)
-    fun notFound(exception: UserNotFoundException, request: HttpServletRequest) = error(HttpStatus.NOT_FOUND, "USER_NOT_FOUND", exception.message ?: "Учётная запись сотрудника не найдена", request)
+    fun notFound(exception: UserNotFoundException, request: HttpServletRequest) = error(
+        HttpStatus.NOT_FOUND,
+        "USER_NOT_FOUND",
+        exception.message ?: "Учётная запись сотрудника не найдена",
+        request
+    )
 
-    private fun error(status: HttpStatus, code: String, message: String, request: HttpServletRequest): ResponseEntity<ApiErrorResponse> =
+    private fun error(
+        status: HttpStatus,
+        code: String,
+        message: String,
+        request: HttpServletRequest
+    ): ResponseEntity<ApiErrorResponse> =
         ResponseEntity.status(status).body(ApiErrorResponse(status.value(), code, message, request.requestURI))
 }

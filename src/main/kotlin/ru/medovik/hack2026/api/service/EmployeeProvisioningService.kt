@@ -33,7 +33,10 @@ class EmployeeProvisioningService {
             }
     }
 
-    private fun EmployeeProperties.toAccount(email: String, passwordEncoder: PasswordEncoder) = UserAccounts(
+    private fun EmployeeProperties.toAccount(
+        email: String,
+        passwordEncoder: PasswordEncoder
+    ) = UserAccounts(
         id = UUID.randomUUID(),
         email = email,
         passwordHash = requireNotNull(passwordEncoder.encode(password)),

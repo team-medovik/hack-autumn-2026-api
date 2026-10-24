@@ -16,13 +16,31 @@ class JwtService(
 ) {
     private val signingKey = Keys.hmacShaKeyFor(Decoders.BASE64.decode(properties.jwtSecret))
 
-    fun createAccessToken(account: UserAccounts): String = createToken(account, "access", properties.accessTokenTtl)
+    fun createAccessToken(
+        account: UserAccounts
+    ): String = createToken(
+        account = account,
+        type = "access",
+        ttl = properties.accessTokenTtl,
+    )
 
-    fun createRefreshToken(account: UserAccounts): String = createToken(account, "refresh", properties.refreshTokenTtl)
+    fun createRefreshToken(account: UserAccounts): String = createToken(
+        account = account,
+        type = "refresh",
+        ttl = properties.refreshTokenTtl
+    )
 
-    fun isValidAccessToken(token: String, email: String): Boolean = isValid(token, email, "access")
+    fun isValidAccessToken(token: String, email: String): Boolean = isValid(
+        token = token,
+        email = email,
+        type = "access"
+    )
 
-    fun isValidRefreshToken(token: String, email: String): Boolean = isValid(token, email, "refresh")
+    fun isValidRefreshToken(token: String, email: String): Boolean = isValid(
+        token = token,
+        email = email,
+        type = "refresh"
+    )
 
     private fun createToken(account: UserAccounts, type: String, ttl: java.time.Duration): String = Jwts.builder()
         .subject(account.email)

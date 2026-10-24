@@ -73,8 +73,8 @@ class AuthenticationService(
         .build()
 
     private fun UserAccounts.toResponse() = CurrentUserResponse(
-        id = requireNotNull(id),
-        email = requireNotNull(email),
+        id = id,
+        email = email,
         role = requireNotNull(role),
         createdAt = requireNotNull(createdAt),
     )

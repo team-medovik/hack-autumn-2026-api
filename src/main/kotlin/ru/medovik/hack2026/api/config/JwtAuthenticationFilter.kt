@@ -20,7 +20,11 @@ class JwtAuthenticationFilter(
     private val accounts: UserAccountRepository,
     private val jsonMapper: JsonMapper,
 ) : OncePerRequestFilter() {
-    override fun doFilterInternal(request: HttpServletRequest, response: HttpServletResponse, filterChain: FilterChain) {
+    override fun doFilterInternal(
+        request: HttpServletRequest,
+        response: HttpServletResponse,
+        filterChain: FilterChain
+    ) {
         val header = request.getHeader(AUTHORIZATION_HEADER)
         if (header == null) {
             filterChain.doFilter(request, response)
@@ -45,14 +49,23 @@ class JwtAuthenticationFilter(
         }
 
         val authority = SimpleGrantedAuthority("ROLE_${account.role}")
-        SecurityContextHolder.getContext().authentication = UsernamePasswordAuthenticationToken(account.email, null, listOf(authority))
+        SecurityContextHolder.getContext().authentication =
+            UsernamePasswordAuthenticationToken(account.email, null, listOf(authority))
         filterChain.doFilter(request, response)
     }
 
     private fun writeInvalidToken(response: HttpServletResponse, path: String) {
         response.status = HttpServletResponse.SC_UNAUTHORIZED
         response.contentType = MediaType.APPLICATION_JSON_VALUE
-        jsonMapper.writeValue(response.writer, ApiErrorResponse(401, "INVALID_TOKEN", "Access-токен некорректен или истёк", path))
+        jsonMapper.writeValue(
+            response.writer,
+            ApiErrorResponse(
+                status = 401,
+                error = "INVALID_TOKEN",
+                message = "Access-токен некорректен или истёк",
+                path = path
+            )
+        )
     }
 
     private companion object {

@@ -13,9 +13,21 @@ import tools.jackson.databind.json.JsonMapper
 class ApiAuthenticationEntryPoint(
     private val jsonMapper: JsonMapper,
 ) : AuthenticationEntryPoint {
-    override fun commence(request: HttpServletRequest, response: HttpServletResponse, authException: AuthenticationException) {
+    override fun commence(
+        request: HttpServletRequest,
+        response: HttpServletResponse,
+        authException: AuthenticationException
+    ) {
         response.status = HttpServletResponse.SC_UNAUTHORIZED
         response.contentType = MediaType.APPLICATION_JSON_VALUE
-        jsonMapper.writeValue(response.writer, ApiErrorResponse(401, "UNAUTHORIZED", "Требуется аутентификация", request.requestURI))
+        jsonMapper.writeValue(
+            response.writer,
+            ApiErrorResponse(
+                status = 401,
+                error = "UNAUTHORIZED",
+                message = "Требуется аутентификация",
+                path = request.requestURI
+            )
+        )
     }
 }
