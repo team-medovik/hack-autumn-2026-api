@@ -47,6 +47,7 @@ dependencies {
     implementation("org.yaml:snakeyaml")
 
     testImplementation(kotlin("test-junit5"))
+    testImplementation("org.springframework.boot:spring-boot-starter-webmvc-test")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 
     // Security and JWT

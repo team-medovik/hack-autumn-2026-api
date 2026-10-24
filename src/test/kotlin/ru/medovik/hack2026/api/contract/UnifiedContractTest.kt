@@ -5,6 +5,8 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 import org.yaml.snakeyaml.Yaml
+import org.yaml.snakeyaml.LoaderOptions
+import org.yaml.snakeyaml.constructor.SafeConstructor
 import ru.medovik.hack2026.api.dto.settings.ModelSettingsChanges
 import ru.medovik.hack2026.api.dto.settings.PatchFactorWeights
 import ru.medovik.hack2026.api.dto.settings.PatchRiskThresholds
@@ -19,7 +21,8 @@ class UnifiedContractTest {
     @Test
     fun `all mandatory case endpoints are in the bundled canonical OpenAPI`() {
         val spec = javaClass.classLoader.getResourceAsStream("openapi/unified.yaml")!!.use {
-            Yaml().load<Map<String, Any>>(it)
+            Yaml(SafeConstructor(LoaderOptions().apply { maxAliasesForCollections = 200 }))
+                .load<Map<String, Any>>(it)
         }
         assertEquals("3.1.0", spec["openapi"])
         @Suppress("UNCHECKED_CAST")

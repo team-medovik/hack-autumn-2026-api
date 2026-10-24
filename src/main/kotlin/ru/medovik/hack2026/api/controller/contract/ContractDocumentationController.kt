@@ -5,6 +5,8 @@ import org.springframework.http.MediaType
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.RestController
 import org.yaml.snakeyaml.Yaml
+import org.yaml.snakeyaml.LoaderOptions
+import org.yaml.snakeyaml.constructor.SafeConstructor
 
 /**
  * Returns the real OpenAPI 3.1 document as JSON, exactly as specified in unified.yaml.
@@ -15,7 +17,8 @@ class ContractDocumentationController {
     private val document: Map<String, Any?> by lazy {
         val resource = ClassPathResource("openapi/unified.yaml")
         resource.inputStream.use { stream ->
-            Yaml().load<Map<String, Any?>>(stream)
+            Yaml(SafeConstructor(LoaderOptions().apply { maxAliasesForCollections = 200 }))
+                .load<Map<String, Any?>>(stream)
                 ?: error("Bundled unified OpenAPI document is empty")
         }
     }
