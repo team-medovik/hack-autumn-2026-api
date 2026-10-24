@@ -1,0 +1,6 @@
+spring:
+  datasource:
+    driver-class-name: org.postgresql.Driver
+    url: jdbc:postgresql://kinoko.su:5432/hack-autumn-2026
+    username: dev_user
+    password: dev_passwd

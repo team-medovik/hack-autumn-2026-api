@@ -1,0 +1,369 @@
+name: Build and deploy
+
+on:
+  push: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # ===== Service =====
+  SERVICE_NAME: 'hack-autumn-2026-api'
+
+  TARGET_DIR: '/home/kinoko/hack-autumn-2026/api'
+
+  JAR_DIR: '/tmp/hack-autumn-2026-api'
+
+  # ===== Build =====
+  BUILD_IMAGE: 'gradle:jdk25'
+  BUILD_USER: 'kinoko'
+
+  # ВАЖНО: это кэш на хосте, который будет примонтирован внутрь Docker.
+  GRADLE_CACHE_DIR: '/home/kinoko/.gradle'
+
+  # clean намеренно убран: сборка и так идёт во временной чистой директории.
+  GRADLE_TASKS: 'build'
+  GRADLE_ARGS: '--no-daemon --no-build-cache --parallel'
+
+  # ===== MinIO =====
+  MINIO_ARTIFACT_PREFIX: 'hack-autumn-2026-api'
+
+  ARTIFACT_ARCHIVE_NAME: 'app-jars.tar.gz'
+
+jobs:
+  build:
+    runs-on: [self-hosted, build]
+
+    outputs:
+      artifact_key: ${{ steps.artifact_vars.outputs.artifact_key }}
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v6
+
+      - name: Prepare artifact name
+        id: artifact_vars
+        run: |
+          echo "artifact_key=${MINIO_ARTIFACT_PREFIX}/${GITHUB_SHA}-${GITHUB_RUN_ID}/${ARTIFACT_ARCHIVE_NAME}" >> "$GITHUB_OUTPUT"
+
+      - name: Build JARs inside Docker with host Gradle cache
+        run: |
+          set -euo pipefail
+
+          BUILD_UID="$(id -u "$BUILD_USER")"
+          BUILD_GID="$(id -g "$BUILD_USER")"
+
+          BUILD_ROOT="${RUNNER_TEMP}/${SERVICE_NAME}-build-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          SRC_DIR="$BUILD_ROOT/src"
+          OUT_DIR="$BUILD_ROOT/out"
+
+          echo "BUILD_ROOT=$BUILD_ROOT" >> "$GITHUB_ENV"
+
+          sudo rm -rf "$BUILD_ROOT"
+          mkdir -p "$SRC_DIR" "$OUT_DIR"
+
+          sudo install -d -o "$BUILD_USER" -g "$BUILD_USER" -m 700 "$GRADLE_CACHE_DIR"
+
+          echo "Копирую исходники во временную директорию..."
+          tar \
+            --exclude='.git' \
+            --exclude='.gradle' \
+            --exclude='build' \
+            --exclude='**/build' \
+            -cf - . | tar -xf - -C "$SRC_DIR"
+
+          sudo chown -R "$BUILD_UID:$BUILD_GID" "$BUILD_ROOT"
+
+          echo "Запускаю сборку в Docker image: $BUILD_IMAGE"
+          echo "Gradle cache on host: $GRADLE_CACHE_DIR"
+
+          docker run --rm \
+            --name "${SERVICE_NAME}-build-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            -u "${BUILD_UID}:${BUILD_GID}" \
+            -e HOME=/home/gradle \
+            -e GRADLE_USER_HOME=/home/gradle/.gradle \
+            -e GRADLE_TASKS="$GRADLE_TASKS" \
+            -e GRADLE_ARGS="$GRADLE_ARGS" \
+            -v "$SRC_DIR:/workspace" \
+            -v "$OUT_DIR:/out" \
+            -v "$GRADLE_CACHE_DIR:/home/gradle/.gradle" \
+            -w /workspace \
+            "$BUILD_IMAGE" \
+            bash -lc '
+              set -euo pipefail
+
+              chmod +x ./gradlew
+
+              echo "GRADLE_USER_HOME=$GRADLE_USER_HOME"
+              ./gradlew $GRADLE_TASKS $GRADLE_ARGS
+
+              mkdir -p /out/jars
+
+              mapfile -t jars < <(find . -path "*/build/libs/*.jar" -type f ! -name "*plain.jar")
+
+              if [ ${#jars[@]} -eq 0 ]; then
+                echo "JAR файлы не найдены"
+                exit 1
+              fi
+
+              echo "Найдены JAR:"
+              printf "%s\n" "${jars[@]}"
+
+              cp "${jars[@]}" /out/jars/
+            '
+
+          echo "Пакую JAR'ы..."
+          sudo chown -R "$(id -u):$(id -g)" "$BUILD_ROOT"
+          tar -czf "$BUILD_ROOT/$ARTIFACT_ARCHIVE_NAME" -C "$OUT_DIR/jars" .
+          cd "$BUILD_ROOT"
+          sha256sum "$ARTIFACT_ARCHIVE_NAME" > "$ARTIFACT_ARCHIVE_NAME.sha256"
+
+          echo "Содержимое артефакта:"
+          tar -tzf "$BUILD_ROOT/$ARTIFACT_ARCHIVE_NAME"
+
+      - name: Upload artifact to local MinIO
+        if: github.ref == 'refs/heads/main'
+        env:
+          MINIO_ENDPOINT: ${{ secrets.MINIO_ENDPOINT }}
+          MINIO_BUCKET: ${{ secrets.MINIO_BUCKET }}
+          MINIO_ACCESS_KEY: ${{ secrets.MINIO_ACCESS_KEY }}
+          MINIO_SECRET_KEY: ${{ secrets.MINIO_SECRET_KEY }}
+        run: |
+          set -euo pipefail
+
+          : "${MINIO_ENDPOINT:?Repository secret MINIO_ENDPOINT is not configured}"
+          : "${MINIO_BUCKET:?Repository secret MINIO_BUCKET is not configured}"
+          : "${MINIO_ACCESS_KEY:?Repository secret MINIO_ACCESS_KEY is not configured}"
+          : "${MINIO_SECRET_KEY:?Repository secret MINIO_SECRET_KEY is not configured}"
+
+          ARTIFACT_KEY="${{ steps.artifact_vars.outputs.artifact_key }}"
+
+          docker run --rm \
+            --network host \
+            -v "$BUILD_ROOT:/artifacts:ro" \
+            -e MINIO_ENDPOINT="$MINIO_ENDPOINT" \
+            -e MINIO_ACCESS_KEY="$MINIO_ACCESS_KEY" \
+            -e MINIO_SECRET_KEY="$MINIO_SECRET_KEY" \
+            -e MINIO_BUCKET="$MINIO_BUCKET" \
+            -e ARTIFACT_KEY="$ARTIFACT_KEY" \
+            -e ARTIFACT_ARCHIVE_NAME="$ARTIFACT_ARCHIVE_NAME" \
+            --entrypoint /bin/sh \
+            minio/mc \
+            -c '
+              set -eu
+
+              mc alias set minio \
+                "$MINIO_ENDPOINT" \
+                "$MINIO_ACCESS_KEY" \
+                "$MINIO_SECRET_KEY" \
+                --api S3v4 \
+                --path on
+
+              mc ls "minio/$MINIO_BUCKET" >/dev/null
+
+              mc cp "/artifacts/$ARTIFACT_ARCHIVE_NAME" \
+                "minio/$MINIO_BUCKET/$ARTIFACT_KEY"
+
+              mc cp "/artifacts/$ARTIFACT_ARCHIVE_NAME.sha256" \
+                "minio/$MINIO_BUCKET/$ARTIFACT_KEY.sha256"
+
+              echo "Artifact uploaded:"
+              echo "$MINIO_BUCKET/$ARTIFACT_KEY"
+            '
+
+      - name: Cleanup old MinIO artifacts
+        if: github.ref == 'refs/heads/main'
+        continue-on-error: true
+        env:
+          MINIO_ENDPOINT: ${{ secrets.MINIO_ENDPOINT }}
+          MINIO_BUCKET: ${{ secrets.MINIO_BUCKET }}
+          MINIO_ACCESS_KEY: ${{ secrets.MINIO_ACCESS_KEY }}
+          MINIO_SECRET_KEY: ${{ secrets.MINIO_SECRET_KEY }}
+        run: |
+          docker run --rm \
+            --network host \
+            -e MINIO_ENDPOINT="$MINIO_ENDPOINT" \
+            -e MINIO_ACCESS_KEY="$MINIO_ACCESS_KEY" \
+            -e MINIO_SECRET_KEY="$MINIO_SECRET_KEY" \
+            -e MINIO_BUCKET="$MINIO_BUCKET" \
+            -e MINIO_ARTIFACT_PREFIX="$MINIO_ARTIFACT_PREFIX" \
+            --entrypoint /bin/sh \
+            minio/mc \
+            -c '
+              set -eu
+
+              mc alias set minio \
+                "$MINIO_ENDPOINT" \
+                "$MINIO_ACCESS_KEY" \
+                "$MINIO_SECRET_KEY" \
+                --api S3v4 \
+                --path on
+
+              mc rm --recursive --force --older-than 7d \
+                "minio/$MINIO_BUCKET/$MINIO_ARTIFACT_PREFIX/" || true
+            '
+
+      - name: Cleanup local build files
+        if: always()
+        run: |
+          if [ -n "${BUILD_ROOT:-}" ]; then
+            sudo rm -rf "$BUILD_ROOT"
+          fi
+
+          docker rm -f "${SERVICE_NAME}-build-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" 2>/dev/null || true
+
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, deploy]
+    needs: build
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v6
+
+      - name: Download built JARs from local MinIO
+        env:
+          MINIO_ENDPOINT: ${{ secrets.MINIO_ENDPOINT }}
+          MINIO_BUCKET: ${{ secrets.MINIO_BUCKET }}
+          MINIO_ACCESS_KEY: ${{ secrets.MINIO_ACCESS_KEY }}
+          MINIO_SECRET_KEY: ${{ secrets.MINIO_SECRET_KEY }}
+        run: |
+          set -euo pipefail
+
+          : "${MINIO_ENDPOINT:?Repository secret MINIO_ENDPOINT is not configured}"
+          : "${MINIO_BUCKET:?Repository secret MINIO_BUCKET is not configured}"
+          : "${MINIO_ACCESS_KEY:?Repository secret MINIO_ACCESS_KEY is not configured}"
+          : "${MINIO_SECRET_KEY:?Repository secret MINIO_SECRET_KEY is not configured}"
+
+          ARTIFACT_KEY="${{ needs.build.outputs.artifact_key }}"
+
+          sudo rm -rf "$JAR_DIR"
+          sudo mkdir -p "$JAR_DIR"
+          sudo chown -R "$(id -u):$(id -g)" "$JAR_DIR"
+
+          docker run --rm \
+            --network host \
+            -v "$JAR_DIR:/download" \
+            -e MINIO_ENDPOINT="$MINIO_ENDPOINT" \
+            -e MINIO_ACCESS_KEY="$MINIO_ACCESS_KEY" \
+            -e MINIO_SECRET_KEY="$MINIO_SECRET_KEY" \
+            -e MINIO_BUCKET="$MINIO_BUCKET" \
+            -e ARTIFACT_KEY="$ARTIFACT_KEY" \
+            -e ARTIFACT_ARCHIVE_NAME="$ARTIFACT_ARCHIVE_NAME" \
+            --entrypoint /bin/sh \
+            minio/mc \
+            -c '
+              set -eu
+
+              mc alias set minio \
+                "$MINIO_ENDPOINT" \
+                "$MINIO_ACCESS_KEY" \
+                "$MINIO_SECRET_KEY" \
+                --api S3v4 \
+                --path on
+
+              mc cp "minio/$MINIO_BUCKET/$ARTIFACT_KEY" \
+                "/download/$ARTIFACT_ARCHIVE_NAME"
+
+              mc cp "minio/$MINIO_BUCKET/$ARTIFACT_KEY.sha256" \
+                "/download/$ARTIFACT_ARCHIVE_NAME.sha256"
+            '
+
+          cd "$JAR_DIR"
+          sha256sum -c "$ARTIFACT_ARCHIVE_NAME.sha256"
+
+          mkdir -p unpacked
+          tar -xzf "$ARTIFACT_ARCHIVE_NAME" -C unpacked
+
+          echo "Downloaded JARs:"
+          ls -lah unpacked
+
+      - name: Stop and remove existing containers
+        run: |
+          if [ -f "$TARGET_DIR/docker-compose.yml" ]; then
+            docker compose -f "$TARGET_DIR/docker-compose.yml" down
+          fi
+
+      - name: Clean target directory
+        run: |
+          sudo rm -rf "$TARGET_DIR"
+          sudo mkdir -p "$TARGET_DIR"
+
+      - name: Copy project files
+        run: |
+          sudo cp -r ./* "$TARGET_DIR"
+          sudo cp .dockerignore "$TARGET_DIR"
+          sudo chown -R kinoko:kinoko "$TARGET_DIR"
+
+      - name: Create production environment file
+        env:
+          ENV_PRODUCTION: ${{ secrets.ENV_PRODUCTION }}
+        run: |
+          set -euo pipefail
+
+          : "${ENV_PRODUCTION:?Repository secret ENV_PRODUCTION is not configured}"
+
+          ENV_FILE="${RUNNER_TEMP}/${SERVICE_NAME}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.env"
+          trap 'rm -f "$ENV_FILE"' EXIT
+
+          umask 077
+          printf '%s\n' "$ENV_PRODUCTION" > "$ENV_FILE"
+          sed -i 's/\r$//' "$ENV_FILE"
+          sed -i '/^SPRING_PROFILES_ACTIVE=/d' "$ENV_FILE"
+          printf '\nSPRING_PROFILES_ACTIVE=prod\n' >> "$ENV_FILE"
+
+          for variable in \
+            SPRING_DATASOURCE_URL \
+            SPRING_DATASOURCE_USERNAME \
+            SPRING_DATASOURCE_PASSWORD
+          do
+            if ! grep -qE "^${variable}=.+$" "$ENV_FILE"; then
+              echo "Required variable $variable is missing from ENV_PRODUCTION"
+              exit 1
+            fi
+          done
+
+          sudo install \
+            -o "$BUILD_USER" \
+            -g "$BUILD_USER" \
+            -m 600 \
+            "$ENV_FILE" \
+            "$TARGET_DIR/.env"
+
+          echo "Production environment file created with keys:"
+          sed -n 's/^\([A-Za-z_][A-Za-z0-9_]*\)=.*/\1/p' "$ENV_FILE"
+
+      - name: Copy JAR to server
+        run: |
+          sudo mkdir -p "$TARGET_DIR/build/libs"
+          sudo cp -r "$JAR_DIR/unpacked/"*.jar "$TARGET_DIR/build/libs/"
+          sudo chown -R kinoko:kinoko "$TARGET_DIR"
+          sudo rm -rf "$JAR_DIR"
+          
+          echo "JARs in target build/libs:"
+          ls -lah "$TARGET_DIR/build/libs"
+
+      - name: Build and deploy with Docker Compose
+        run: |
+          if [ -f "$TARGET_DIR/docker-compose.yml" ]; then
+            docker compose -f "$TARGET_DIR/docker-compose.yml" rm -f
+          fi
+
+          docker compose -f "$TARGET_DIR/docker-compose.yml" up --build -d
+
+          sleep 60
+
+          if docker compose -f "$TARGET_DIR/docker-compose.yml" logs | grep -i "\[ERROR\]"; then
+            echo "Ошибка деплоя. В логах найдены ошибки"
+            docker compose -f "$TARGET_DIR/docker-compose.yml" logs | grep -i "\[ERROR\]"
+            exit 1
+          else
+            echo "Ошибок в логах не найдено. Деплой успешен"
+          fi
+
+      - name: Confirm deployment
+        run: echo "Деплой окончен"
