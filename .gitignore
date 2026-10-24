@@ -27,6 +27,10 @@ out/
 ### Kotlin ###
 .kotlin
 
+### Python fixture generator ###
+__pycache__/
+*.py[cod]
+
 ### Eclipse ###
 .apt_generated
 .classpath

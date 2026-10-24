@@ -1,0 +1,12 @@
+{
+  "horizonDays": 7,
+  "weights": {
+    "F1": 50.0,
+    "F2": 40.0,
+    "F3": 70.0,
+    "F4": 30.0,
+    "F5": 15.0
+  },
+  "mediumThreshold": 40.0,
+  "highThreshold": 70.0
+}
