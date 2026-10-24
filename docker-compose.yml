@@ -22,8 +22,7 @@ services:
       - backend
     ports:
       - "33000:33000"
-    expose:
-      - "33001"
+      - "33001:33001"
     labels:
       observability.metrics: "true"
       observability.logs: "true"
