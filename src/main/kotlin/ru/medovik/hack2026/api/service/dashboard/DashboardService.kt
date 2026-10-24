@@ -302,11 +302,14 @@ class DashboardService(
                 available = euros(funding.availableFunds),
                 required = if (client.score == null || funding.requiredFunds == 0L) null else euros(funding.requiredFunds),
                 monthlyLoss = breakdown.fold(ZERO) { sum, item -> sum + item.loss },
+                bonus = euros(client.account.bonusBalance),
+                referral = euros(client.account.withdrawBalance),
             ),
             services = services,
             lossBreakdown = LossBreakdown(
                 k = snapshot.risk.settings.balanceLossFactor,
                 uncoveredShare = funding.shortageStrength,
+                horizonDays = snapshot.risk.settings.horizonDays,
                 items = breakdown,
             ),
         )

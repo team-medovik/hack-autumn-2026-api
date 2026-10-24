@@ -12,6 +12,7 @@ import ru.medovik.hack2026.api.dto.settings.FinanceSettings
 import ru.medovik.hack2026.api.dto.settings.ForecastSettings
 import ru.medovik.hack2026.api.dto.settings.ModelSettings
 import ru.medovik.hack2026.api.dto.settings.ModelSettingsValues
+import ru.medovik.hack2026.api.dto.settings.PatchModelSettingsRequest
 import ru.medovik.hack2026.api.dto.settings.RiskThresholds
 import ru.medovik.hack2026.api.dto.settings.SaveModelSettingsRequest
 import ru.medovik.hack2026.api.exception.InvalidModelSettingsException
@@ -89,6 +90,32 @@ class ModelSettingsService(
         return result
     }
 
+    /**
+     * The row lock covers read, merge and write. Legacy PUT and contract PATCH share
+     * optimistic version checks, validation and database persistence.
+     */
+    @Transactional
+    fun patch(request: PatchModelSettingsRequest, updatedBy: String): ModelSettings {
+        if (request.version < 1L) throw InvalidModelSettingsException("version должен быть положительным")
+        repository.lockForSave()
+        val current = repository.current()
+        if (request.version != current.version) {
+            throw ModelSettingsConflictException(
+                current = response(
+                    version = current.version,
+                    updatedAt = current.updatedAt,
+                    updatedBy = current.updatedBy,
+                    values = current.values,
+                ),
+            )
+        }
+        val merged = request.changes.mergeInto(current.values)
+        return save(
+            request = SaveModelSettingsRequest(version = current.version, values = merged),
+            updatedBy = updatedBy,
+        )
+    }
+
     @Transactional(readOnly = true)
     fun riskSettings(): RiskSettings = toRiskSettings(repository.current().values)
 
@@ -133,7 +160,7 @@ class ModelSettingsService(
             weights.disabledByClient,
             weights.bonusesExceedMoney,
         )
-        if (allWeights.any { it !in 0..100 }) throw InvalidModelSettingsException("Веса должны быть от 0 до 100")
+        if ((allWeights + weights.additionalWeights.values).any { it !in 0..100 }) throw InvalidModelSettingsException("Веса должны быть от 0 до 100")
         val thresholds = values.riskThresholds
         if (thresholds.medium !in 1..100 || thresholds.high !in 1..100 || thresholds.high <= thresholds.medium) {
             throw InvalidModelSettingsException("Пороги должны удовлетворять 0 < medium < high <= 100")
@@ -158,7 +185,7 @@ class ModelSettingsService(
             "F4" to values.factorWeights.awaitingPaymentWithoutFunds.toDouble(),
             "F5" to values.factorWeights.disabledByClient.toDouble(),
             "F6" to values.factorWeights.bonusesExceedMoney.toDouble(),
-        ),
+        ) + values.factorWeights.additionalWeights.mapValues { it.value.toDouble() },
         mediumThreshold = values.riskThresholds.medium.toDouble(),
         highThreshold = values.riskThresholds.high.toDouble(),
         bonusesAsMoney = values.finance.bonusesAsMoney,

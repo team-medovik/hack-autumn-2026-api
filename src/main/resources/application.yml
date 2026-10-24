@@ -22,11 +22,12 @@ app:
 springdoc:
   api-docs:
     enabled: true
-    path: /api/v1/openapi
+    path: /api/v1/internal-openapi
   swagger-ui:
     csrf:
       enabled: true
     path: /api/v1/docs
+    url: /api/v1/openapi
 
 management:
   server:

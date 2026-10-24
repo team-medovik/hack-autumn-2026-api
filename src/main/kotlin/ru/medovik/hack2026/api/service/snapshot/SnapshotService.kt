@@ -61,6 +61,13 @@ class SnapshotService(
         } catch (_: Exception) {
             throw InvalidSnapshotException("Не удалось извлечь данные из JSON: файл не является корректным JSON")
         }
+        // SourceSnapshot is oneOf(RiskSnapshot, NestedRiskSnapshot). A payload matching
+        // both branches must be rejected rather than silently choosing one.
+        val canonicalForm = root["accounts"] is List<*> && root["services"] is List<*>
+        val nestedForm = (root["clients"] as? List<*>)?.isNotEmpty() == true
+        if (canonicalForm && nestedForm) {
+            throw InvalidSnapshotException("Снимок не может одновременно содержать accounts/services и clients")
+        }
         val canonical = try {
             when {
                 root["accounts"] is List<*> && root["services"] is List<*> -> source
