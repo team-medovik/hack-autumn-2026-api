@@ -1,7 +1,7 @@
 CREATE TABLE user_accounts (
     id UUID PRIMARY KEY,
-    email VARCHAR(320) NOT NULL UNIQUE,
-    password_hash VARCHAR(255) NOT NULL,
+    email VARCHAR(255) NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
     role VARCHAR(32) NOT NULL DEFAULT 'EMPLOYEE',
     status VARCHAR(32) NOT NULL DEFAULT 'ACTIVE',
     provisioning_source VARCHAR(32) NOT NULL,
@@ -21,3 +21,13 @@ CREATE TABLE oidc_identities (
 );
 
 CREATE INDEX idx_oidc_identities_issuer_subject ON oidc_identities (issuer, subject);
+
+CREATE TABLE billing_snapshots (
+    id VARCHAR(255) PRIMARY KEY,
+    taken_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    payload JSONB NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT billing_snapshots_payload_object CHECK (jsonb_typeof(payload) = 'object')
+);
+
+CREATE INDEX idx_billing_snapshots_taken_at ON billing_snapshots (taken_at DESC, id DESC);
