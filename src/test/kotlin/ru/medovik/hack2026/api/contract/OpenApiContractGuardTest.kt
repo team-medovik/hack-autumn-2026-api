@@ -73,8 +73,9 @@ class OpenApiContractGuardTest {
 
     @Test
     fun `PATCH rejects unknown properties, empty groups and invalid JSON types`() {
+        val service = Mockito.mock(ModelSettingsService::class.java)
         val controller = ContractModelSettingsController(
-            service = Mockito.mock(ModelSettingsService::class.java),
+            service = service,
             jsonMapper = JsonMapper.builder().build(),
         )
         val auth = Mockito.mock(org.springframework.security.core.Authentication::class.java)
@@ -93,10 +94,7 @@ class OpenApiContractGuardTest {
                 controller.patch(payload, auth)
             }
         }
-        Mockito.verifyNoInteractions(controller.javaClass.getDeclaredField("service").let {
-            it.isAccessible = true
-            it.get(controller)
-        })
+        Mockito.verifyNoInteractions(service)
     }
 
     @Test
