@@ -32,6 +32,16 @@ class UserAccountRepository(
         .orderBy(USER_ACCOUNTS.CREATED_AT, USER_ACCOUNTS.EMAIL)
         .fetchInto(UserAccounts::class.java)
 
+    fun lockActiveAdminIds(): List<UUID> = dsl
+        .select(USER_ACCOUNTS.ID)
+        .from(USER_ACCOUNTS)
+        .where(USER_ACCOUNTS.ROLE.eq("ADMIN"))
+        .and(USER_ACCOUNTS.STATUS.eq("ACTIVE"))
+        .orderBy(USER_ACCOUNTS.ID)
+        .forUpdate()
+        .fetch(USER_ACCOUNTS.ID)
+        .map { requireNotNull(it) }
+
     fun insert(account: UserAccounts): UserAccounts = dsl
         .insertInto(USER_ACCOUNTS)
         .set(dsl.newRecord(USER_ACCOUNTS, account))

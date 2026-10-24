@@ -10,6 +10,8 @@ import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.RestControllerAdvice
 import ru.medovik.hack2026.api.dto.response.common.ApiErrorResponse
 import ru.medovik.hack2026.api.exception.AuthenticationException
+import ru.medovik.hack2026.api.exception.UserAlreadyExistsException
+import ru.medovik.hack2026.api.exception.UserDeletionForbiddenException
 import ru.medovik.hack2026.api.exception.UserNotFoundException
 
 @RestControllerAdvice
@@ -39,6 +41,22 @@ class AuthenticationExceptionHandler {
         status = HttpStatus.NOT_FOUND,
         code = "USER_NOT_FOUND",
         message = exception.message ?: "Учётная запись сотрудника не найдена",
+        request = request,
+    )
+
+    @ExceptionHandler(UserAlreadyExistsException::class)
+    fun userAlreadyExists(exception: UserAlreadyExistsException, request: HttpServletRequest) = error(
+        status = HttpStatus.CONFLICT,
+        code = "USER_ALREADY_EXISTS",
+        message = exception.message ?: "Пользователь уже существует",
+        request = request,
+    )
+
+    @ExceptionHandler(UserDeletionForbiddenException::class)
+    fun userDeletionForbidden(exception: UserDeletionForbiddenException, request: HttpServletRequest) = error(
+        status = HttpStatus.CONFLICT,
+        code = exception.code,
+        message = exception.message ?: "Удаление пользователя запрещено",
         request = request,
     )
 
