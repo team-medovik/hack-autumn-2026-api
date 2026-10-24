@@ -31,6 +31,7 @@ env:
 
   # ===== MinIO =====
   MINIO_ARTIFACT_PREFIX: 'hack-autumn-2026-api'
+  MINIO_MC_IMAGE: 'chainguard/minio-client:latest-dev@sha256:3f349bd07076e8e4040dc5c32598b632268accba8ac7f460cb077670ee2e3407'
 
   ARTIFACT_ARCHIVE_NAME: 'app-jars.tar.gz'
 
@@ -152,7 +153,7 @@ jobs:
             -e ARTIFACT_KEY="$ARTIFACT_KEY" \
             -e ARTIFACT_ARCHIVE_NAME="$ARTIFACT_ARCHIVE_NAME" \
             --entrypoint /bin/sh \
-            minio/mc \
+            "$MINIO_MC_IMAGE" \
             -c '
               set -eu
 
@@ -192,7 +193,7 @@ jobs:
             -e MINIO_BUCKET="$MINIO_BUCKET" \
             -e MINIO_ARTIFACT_PREFIX="$MINIO_ARTIFACT_PREFIX" \
             --entrypoint /bin/sh \
-            minio/mc \
+            "$MINIO_MC_IMAGE" \
             -c '
               set -eu
 
@@ -255,7 +256,7 @@ jobs:
             -e ARTIFACT_KEY="$ARTIFACT_KEY" \
             -e ARTIFACT_ARCHIVE_NAME="$ARTIFACT_ARCHIVE_NAME" \
             --entrypoint /bin/sh \
-            minio/mc \
+            "$MINIO_MC_IMAGE" \
             -c '
               set -eu
 
