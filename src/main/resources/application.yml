@@ -14,10 +14,10 @@ app:
     access-token-ttl: ${APP_AUTH_ACCESS_TOKEN_TTL:15m}
     refresh-token-ttl: ${APP_AUTH_REFRESH_TOKEN_TTL:30d}
     secure-cookie: ${APP_AUTH_SECURE_COOKIE:false}
-    # Указанные здесь сотрудники создаются при запуске. APP_AUTH_ENVIRONMENT_EMPLOYEES_0_* добавляет второй источник.
-    # Пример: [{ email: admin@example.com, password: change_me, role: ADMIN }]
-    employees: []
-    environment-employees: []
+    oidc:
+      enabled: ${APP_AUTH_OIDC_ENABLED:false}
+      success-redirect-uri: ${APP_AUTH_OIDC_SUCCESS_REDIRECT_URI:/}
+      registrations: {}
 
 springdoc:
   api-docs:

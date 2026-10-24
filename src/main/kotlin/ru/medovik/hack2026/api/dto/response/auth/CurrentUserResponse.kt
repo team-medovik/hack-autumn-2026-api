@@ -1,4 +1,4 @@
-package ru.medovik.hack2026.api.dto
+package ru.medovik.hack2026.api.dto.response.auth
 
 import io.swagger.v3.oas.annotations.media.Schema
 import java.time.OffsetDateTime

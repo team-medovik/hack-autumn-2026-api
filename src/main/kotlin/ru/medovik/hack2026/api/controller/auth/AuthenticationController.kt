@@ -1,4 +1,4 @@
-package ru.medovik.hack2026.api.controller
+package ru.medovik.hack2026.api.controller.auth
 
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.Parameter
@@ -11,18 +11,18 @@ import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.servlet.http.HttpServletResponse
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
-import org.springframework.security.core.annotation.AuthenticationPrincipal
+import org.springframework.security.core.Authentication
 import org.springframework.web.bind.annotation.CookieValue
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
-import ru.medovik.hack2026.api.dto.ApiErrorResponse
-import ru.medovik.hack2026.api.dto.AuthenticationResponse
-import ru.medovik.hack2026.api.dto.CurrentUserResponse
-import ru.medovik.hack2026.api.dto.LoginRequest
-import ru.medovik.hack2026.api.service.AuthenticationService
+import ru.medovik.hack2026.api.dto.response.common.ApiErrorResponse
+import ru.medovik.hack2026.api.dto.response.auth.AuthenticationResponse
+import ru.medovik.hack2026.api.dto.response.auth.CurrentUserResponse
+import ru.medovik.hack2026.api.dto.request.auth.LoginRequest
+import ru.medovik.hack2026.api.service.auth.AuthenticationService
 
 @RestController
 @RequestMapping("/api/v1/auth")
@@ -51,8 +51,12 @@ class AuthenticationController(
         ),
     )
     fun login(
-        @RequestBody request: LoginRequest, response: HttpServletResponse
-    ): AuthenticationResponse = authenticationService.login(request, response)
+        @RequestBody request: LoginRequest,
+        response: HttpServletResponse,
+    ): AuthenticationResponse = authenticationService.login(
+        request = request,
+        response = response,
+    )
 
     @PostMapping("/refresh")
     @Operation(
@@ -75,9 +79,13 @@ class AuthenticationController(
         @Parameter(
             description = "HttpOnly cookie, устанавливаемая при входе.",
             required = true
-        ) @CookieValue("refresh_token") refreshToken: String,
+        )
+        @CookieValue("refresh_token") refreshToken: String,
         response: HttpServletResponse,
-    ): AuthenticationResponse = authenticationService.refresh(refreshToken, response)
+    ): AuthenticationResponse = authenticationService.refresh(
+        refreshToken = refreshToken,
+        response = response,
+    )
 
     @PostMapping("/logout")
     @Operation(
@@ -108,8 +116,6 @@ class AuthenticationController(
             content = [Content(schema = Schema(implementation = ApiErrorResponse::class))]
         ),
     )
-    fun me(@AuthenticationPrincipal email: String): CurrentUserResponse = authenticationService.currentUser(email)
 
-    // TODO(OIDC): добавить /oidc/{provider}/login и callback после согласования discovery провайдера,
-    // хранения state/nonce, разрешённого списка redirect URL и правил связывания учётных записей.
+    fun me(authentication: Authentication): CurrentUserResponse = authenticationService.currentUser(authentication.name)
 }

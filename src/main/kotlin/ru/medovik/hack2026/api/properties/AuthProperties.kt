@@ -9,17 +9,5 @@ data class AuthProperties(
     val accessTokenTtl: Duration = Duration.ofMinutes(15),
     val refreshTokenTtl: Duration = Duration.ofDays(30),
     val secureCookie: Boolean = true,
-    val employees: List<EmployeeProperties> = emptyList(),
-    val environmentEmployees: List<EmployeeProperties> = emptyList(),
-) {
-    data class EmployeeProperties(
-        val email: String,
-        val password: String,
-        val role: AccountRole = AccountRole.EMPLOYEE,
-    )
-
-    enum class AccountRole {
-        ADMIN,
-        EMPLOYEE,
-    }
-}
+    val oidc: OidcProperties = OidcProperties(),
+)

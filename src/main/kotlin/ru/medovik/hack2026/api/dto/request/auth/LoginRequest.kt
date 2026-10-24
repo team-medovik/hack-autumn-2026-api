@@ -1,4 +1,4 @@
-package ru.medovik.hack2026.api.dto
+package ru.medovik.hack2026.api.dto.request.auth
 
 import io.swagger.v3.oas.annotations.media.Schema
 
@@ -6,6 +6,9 @@ import io.swagger.v3.oas.annotations.media.Schema
 data class LoginRequest(
     @field:Schema(description = "Email сотрудника.", example = "admin@example.com")
     val email: String,
-    @field:Schema(description = "Пароль сотрудника. Никогда не возвращается API.", example = "correct-horse-battery-staple")
+    @field:Schema(
+        description = "Пароль сотрудника. Никогда не возвращается API.",
+        example = "correct-horse-battery-staple"
+    )
     val password: String,
 )
