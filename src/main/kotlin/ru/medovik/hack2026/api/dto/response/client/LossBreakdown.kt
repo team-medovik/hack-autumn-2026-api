@@ -8,6 +8,8 @@ data class LossBreakdown(
     val k: Double,
     @field:Schema(description = "Доля нехватки средств от 0 до 1", example = "0.3")
     val uncoveredShare: Double,
+    @field:Schema(description = "Горизонт расчёта в днях", minimum = "1", maximum = "30")
+    val horizonDays: Int,
     @field:Schema(description = "Вклад каждой услуги")
     val items: List<LossBreakdownItem>,
 )

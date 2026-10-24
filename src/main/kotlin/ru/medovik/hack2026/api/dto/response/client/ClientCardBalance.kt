@@ -11,4 +11,8 @@ data class ClientCardBalance(
     val required: BigDecimal?,
     @field:Schema(description = "Ожидаемые ежемесячные потери", example = "35.50")
     val monthlyLoss: BigDecimal,
+    @field:Schema(description = "Бонусный баланс в евро")
+    val bonus: BigDecimal,
+    @field:Schema(description = "Реферальный баланс в евро")
+    val referral: BigDecimal,
 )

@@ -8,7 +8,7 @@ import java.time.Instant
 data class Transaction(
     @field:Schema(description = "Уникальный ID транзакции", example = "1")
     val id: Long,
-    @field:Schema(description = "Сумма по исходному формату", minimum = "0", maximum = "1000", example = "100")
+    @field:Schema(description = "Сумма по исходному формату", minimum = "0", example = "100")
     val amount: Int,
     @field:Schema(description = "Статус транзакции", example = "performed")
     val status: TransactionStatus,
@@ -22,7 +22,7 @@ data class Transaction(
     val serviceId: Long,
 ) {
     init {
-        require(amount in 0..1000) { "Transaction $id: amount must be in 0..1000" }
+        require(amount >= 0) { "Transaction $id: amount must be non-negative eurocents" }
         require((status == TransactionStatus.PERFORMED) == (performedAt != null)) {
             "Transaction $id: status and performedAt disagree"
         }

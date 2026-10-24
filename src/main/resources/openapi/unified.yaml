@@ -1,0 +1,2389 @@
+openapi: 3.1.0
+info:
+  title: Team Medovik — Churn Risk Analyzer API
+  version: 1.0.0-contract
+  description: 'Единый целевой контракт для frontend и backend хакатона «Анализатор рисков оттока». Канонические
+    endpoint-ы на 100% соответствуют маршрутам ТЗ, дополнительные endpoint-ы описаны отдельно. Важно: это СОГЛАСОВАННЫЙ
+    ЦЕЛЕВОЙ контракт, не автоматическая Swagger-выгрузка текущего сервера: часть маршрутов/полей необходимо реализовать.
+    Текущие Swagger и фронтовые фрагменты расходятся.
+
+
+    Соглашения: входящие денежные суммы source snapshot целые евроценты (100 = €1); в ответах UI и агрегатах — числовые
+    евро. Score ∈ [0,100] — объяснимый экспертный индекс, НЕ откалиброванная вероятность оттока. level = none и
+    score = null при отсутствии оцениваемых услуг. Изменение коэффициентов /source/snapshot должно отражаться в
+    клиентах, аналитике и метриках. Рекомендуемое автообновление UI: polling с интервалом до 30 секунд + немедленная
+    инвалидация запросов после успешного PATCH/PUT, без полной перезагрузки страницы.
+
+
+    Комментарий для сдачи: расширение новыми признаками предполагает отдельную реализацию вычисления, добавление
+    редактируемого веса/метаданных и обратную совместимость DTO; подтверждается тестом.
+
+    '
+servers:
+- url: https://hack.kinoko.su
+  description: Публичный HTTPS reverse proxy (обязательна корректная маршрутизация /api/v1)
+- url: http://localhost:33000
+  description: Локальный API для Docker Compose/разработки
+tags:
+- name: Аутентификация
+  description: Вход и JWT-сессия; OIDC опционально
+- name: Клиенты
+  description: Канонические по ТЗ списки, детализация, ранжирование
+- name: Аналитика
+  description: Денежная оценка и объяснимая аналитика
+- name: Модель
+  description: Версионируемые коэффициенты и пересчёт
+- name: Источник данных
+  description: Полная замена снимка из биллинга
+- name: Мониторинг
+  description: Метрики для Prometheus
+- name: Документация
+  description: Swagger UI и спецификация
+- name: История снимков
+  description: Дополнительные функции импорта/экспорта
+- name: Настройки приложения
+  description: Дата расчёта
+- name: Аккаунт
+  description: Смена пароля
+- name: Пользователи
+  description: Управление сотрудниками с ролью ADMIN
+security: &id001
+- bearerAuth: []
+paths:
+  /api/v1/auth/login:
+    post:
+      tags:
+      - Аутентификация
+      operationId: login
+      summary: Вход по логину и паролю
+      description: Учётная запись сотрудника. Публичной регистрации нет. Сервер устанавливает Secure HttpOnly SameSite
+        refresh cookie в HTTPS.
+      security: []
+      requestBody:
+        required: true
+        description: Тело запроса JSON
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: JWT в теле, HttpOnly refresh_token — в Set-Cookie.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthenticationResponse'
+        '400': &id003
+          description: Неверные параметры запроса.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+        '401': &id002
+          description: JWT отсутствует, истёк или некорректен.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+  /api/v1/auth/me:
+    get:
+      tags:
+      - Аутентификация
+      operationId: getCurrentUser
+      summary: Текущий сотрудник
+      security: *id001
+      responses:
+        '200':
+          description: Успешный ответ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurrentUserResponse'
+        '401': *id002
+  /api/v1/auth/logout:
+    post:
+      tags:
+      - Аутентификация
+      operationId: logout
+      summary: Завершить сеанс
+      security: []
+      responses:
+        '204':
+          description: Refresh-cookie удалена. Access JWT остаётся валидным до TTL.
+  /api/v1/auth/refresh:
+    post:
+      tags:
+      - Аутентификация
+      operationId: refreshSession
+      summary: Обновить access JWT
+      description: Refresh token передаётся HttpOnly-cookie и ротируется при использовании.
+      security: []
+      parameters:
+      - name: refresh_token
+        in: cookie
+        required: true
+        schema:
+          type: string
+        description: Cookie, установленная login/refresh.
+      responses:
+        '200':
+          description: Успешный ответ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthenticationResponse'
+        '401': *id002
+  /api/v1/auth/oidc/{provider}/login:
+    get:
+      tags:
+      - Аутентификация
+      operationId: startOidcLogin
+      summary: Необязательный OIDC-вход
+      description: Дополнительная функция, доступна лишь если соответствующий провайдер настроен.
+      security: []
+      parameters:
+      - name: provider
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '302':
+          description: Redirect на провайдера
+          headers:
+            Location:
+              schema:
+                type: string
+                format: uri
+        '400': *id003
+  /api/v1/customers:
+    get:
+      tags:
+      - Клиенты
+      operationId: listCustomers
+      summary: 'Клиенты с оценкой риска: поиск, сортировка, пагинация'
+      description: ОБЯЗАТЕЛЬНО ПО ТЗ. Каждый элемент содержит ID, email, основной баланс, totalReplenished, score,
+        уровень и причину. score=null, level=none — нет оценки; при пустой базе items=[] и total=0. Сортировка выполняется
+        на сервере по всем найденным клиентам и в обе стороны; null score всегда в конце.
+      security: *id001
+      parameters:
+      - &id004
+        name: level
+        in: query
+        required: false
+        schema:
+          type: string
+          enum: &id012
+          - high
+          - medium
+          - low
+          - none
+        description: Фильтр риска; при непустом search игнорируется.
+      - &id005
+        name: search
+        in: query
+        required: false
+        schema:
+          type: string
+        description: Подстрока email/ID без учёта регистра.
+      - &id006
+        name: sort
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - score
+          - id
+          - email
+          - balance
+          - topUp
+          - monthlyLoss
+        description: В ТЗ обязательно двунаправленно сортировать id, email, balance, topUp.
+      - &id007
+        name: order
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - asc
+          - desc
+          default: desc
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+      - name: pageSize
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 12
+      responses:
+        '200':
+          description: Успешный ответ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientsResponse'
+        '400': *id003
+        '401': *id002
+  /api/v1/customers/{id}:
+    get:
+      tags:
+      - Клиенты
+      operationId: getCustomer
+      summary: Подробная оценка клиента, услуги и причины риска
+      description: ОБЯЗАТЕЛЬНО ПО ТЗ. Детализация по всем услугам, включая deleted и blocked, причины с весами,
+        положение баланса и расшифровка потенциальных потерь. Если живых услуг нет — score=null, level=none.
+      security: *id001
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Идентификатор из accounts.id, представлен как строка.
+      responses:
+        '200':
+          description: Успешный ответ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientCard'
+        '401': *id002
+        '404': &id008
+          description: Запрошенный ресурс не найден.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+  /api/v1/customers/{id}/position:
+    get:
+      tags:
+      - Клиенты
+      operationId: getCustomerPosition
+      summary: Позиция клиента в текущей сортировке (дополнительно)
+      security: *id001
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - *id004
+      - *id005
+      - *id006
+      - *id007
+      responses:
+        '200':
+          description: Успешный ответ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientPosition'
+        '400': *id003
+        '401': *id002
+        '404': *id008
+  /api/v1/analytics/summary:
+    get:
+      tags:
+      - Аналитика
+      operationId: getAnalyticsSummary
+      summary: Сводка рисков и потенциальной денежной потери
+      description: ОБЯЗАТЕЛЬНО ПО ТЗ. Суммарная ожидаемая месячная потеря и распределение клиентов по уровням; главные
+        причины, топ и прогноз. Потери рассчитываются по нормализованной цене периода, экспертному риску и покрытию
+        средствами. История при единственном снимке недоступна, не показывать её как факт. Клиентский score — индекс
+        внимания, не обученная вероятность.
+      security: *id001
+      responses:
+        '200':
+          description: Успешный ответ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardResponse'
+        '401': *id002
+  /api/v1/model/settings:
+    get:
+      tags:
+      - Модель
+      operationId: getRiskModelSettings
+      summary: Действующие коэффициенты и настройки
+      description: ОБЯЗАТЕЛЬНО ПО ТЗ. Возвращает все коэффициенты, пороги, горизонт, версию, значения по умолчанию
+        и scoreHistogram.
+      security: *id001
+      responses:
+        '200':
+          description: Успешный ответ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModelSettings'
+        '401': *id002
+    patch:
+      tags:
+      - Модель
+      operationId: patchRiskModelSettings
+      summary: Частично изменить коэффициенты модели и пересчитать
+      description: ОБЯЗАТЕЛЬНО ПО ТЗ. Принимает ожидаемую version и только изменённые поля; атомарно накладывает
+        PATCH на текущие значения. Проверяет целую модель (high > medium и т.д.), сохраняет в БД, пересчитывает
+        score, рейтинг и деньги. Ответ 200 только после успешного применения; UI без reload инвалидирует запросы
+        и обновляет данные.
+      security: *id001
+      requestBody:
+        required: true
+        description: Тело запроса JSON
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchModelSettingsRequest'
+      responses:
+        '200':
+          description: Успешный ответ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModelSettings'
+        '400': *id003
+        '401': *id002
+        '409':
+          description: Версия настроек устарела; current содержит актуальное состояние.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModelSettingsConflict'
+        '422': &id009
+          description: Невалидные данные или нарушение бизнес-ограничений; изменения не применены.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+  /api/v1/source/snapshot:
+    put:
+      tags:
+      - Источник данных
+      operationId: replaceSourceSnapshot
+      summary: Заменить исходный снимок биллинга целиком
+      description: ОБЯЗАТЕЛЬНО ПО ТЗ. Полная, атомарная замена активного снимка. JSON содержит accounts/services/transactions
+        (основной вариант) либо clients[].services (поддерживается текущим бэком). Все ID, статусы и ссылки проверяются.
+        Плохой снимок не изменяет активный. Транзакции участвуют в валидации, но не обязаны быть признаком риска.
+        Этот PUT идемпотентен по состоянию исходных данных; история загрузок может вести отдельные записи.
+      security: *id001
+      parameters:
+      - name: fileName
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+          default: snapshot.json
+        description: Необязательное имя файла для истории; не влияет на формат снимка.
+      requestBody:
+        required: true
+        description: Исходный JSON, не multipart. Максимум 20 МиБ.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SourceSnapshot'
+      responses:
+        '200':
+          description: Новый активный снимок сохранён, показатели пересчитаны.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SnapshotRecord'
+        '400': *id003
+        '401': *id002
+        '413':
+          description: JSON больше 20 МиБ.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+        '422': *id009
+  /metrics:
+    get:
+      tags:
+      - Мониторинг
+      operationId: getRiskMetrics
+      summary: Prometheus-метрики по клиентам и ожидаемым потерям
+      description: ОБЯЗАТЕЛЬНО ПО ТЗ. Доступно Prometheus в защищённой внутренней сети/через allowlist; анонимный
+        публичный доступ снаружи закрывается reverse proxy. Обязательны churn_customers{level=...} и churn_expected_monthly_loss_eur.
+        Суммы должны совпадать с analytics/summary при одинаковой дате/версии данных.
+      security: []
+      responses:
+        '200':
+          description: Prometheus text exposition (актуальные агрегаты; без PII)
+          content:
+            text/plain; version=0.0.4; charset=utf-8:
+              schema:
+                type: string
+              example: '# TYPE churn_customers gauge
+
+                churn_customers{level="high"} 12
+
+                churn_customers{level="medium"} 18
+
+                churn_customers{level="low"} 9
+
+                churn_customers{level="none"} 3
+
+                # TYPE churn_expected_monthly_loss_eur gauge
+
+                churn_expected_monthly_loss_eur 1296.9
+
+                '
+  /api/v1/docs:
+    get:
+      tags:
+      - Документация
+      operationId: getSwaggerUi
+      summary: Интерактивная Swagger UI
+      description: ОБЯЗАТЕЛЬНО ПО ТЗ. UI загружает актуальный /api/v1/openapi и показывает все канонические операции;
+        не должен редиректить на несуществующий контекст.
+      security: []
+      responses:
+        '200':
+          description: Swagger UI (HTML)
+          content:
+            text/html:
+              schema:
+                type: string
+        '302':
+          description: Допустимый redirect на swagger-ui/index.html
+          headers:
+            Location:
+              schema:
+                type: string
+  /api/v1/openapi:
+    get:
+      tags:
+      - Документация
+      operationId: getOpenApiDocument
+      summary: OpenAPI 3.1.0 JSON
+      security: []
+      responses:
+        '200':
+          description: Актуальная OpenAPI 3.1.0 спецификация сервиса.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+  /api/v1/snapshots:
+    get:
+      tags:
+      - История снимков
+      operationId: listSnapshots
+      summary: История импортированных снимков
+      description: Расширение для страницы импорта/экспорта. Возвращает новые сверху.
+      security: *id001
+      responses:
+        '200':
+          description: Успешный ответ
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SnapshotRecord'
+        '401': *id002
+  /api/v1/snapshots/{id}/file:
+    get:
+      tags:
+      - История снимков
+      operationId: downloadSnapshot
+      summary: Скачать исходный файл сохранённого снимка
+      security: *id001
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Исходный JSON без изменений
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+              example: attachment; filename="data.json"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SourceSnapshot'
+        '401': *id002
+        '404': *id008
+  /api/v1/settings/calculation-date:
+    get:
+      tags:
+      - Настройки приложения
+      operationId: getCalculationDate
+      summary: Текущий режим времени расчёта
+      security: *id001
+      responses:
+        '200':
+          description: Успешный ответ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CalculationDate'
+        '401': *id002
+    put:
+      tags:
+      - Настройки приложения
+      operationId: saveCalculationDate
+      summary: Сменить опорный момент расчёта
+      security: *id001
+      requestBody:
+        required: true
+        description: Тело запроса JSON
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CalculationDate'
+      responses:
+        '200':
+          description: Успешный ответ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CalculationDate'
+        '401': *id002
+        '422': *id009
+  /api/v1/account/password:
+    post:
+      tags:
+      - Аккаунт
+      operationId: changePassword
+      summary: Сменить собственный пароль
+      security: *id001
+      requestBody:
+        required: true
+        description: Тело запроса JSON
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePasswordRequest'
+      responses:
+        '204':
+          description: Пароль изменён
+        '400': *id003
+        '401': *id002
+        '422': *id009
+  /api/v1/admin/users:
+    get:
+      tags:
+      - Пользователи
+      operationId: listAdminUsers
+      summary: Получить список сотрудников
+      security: *id001
+      responses:
+        '200':
+          description: Успешный ответ
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AdminUserResponse'
+        '401': *id002
+        '403': &id010
+          description: Недостаточно прав (роль ADMIN требуется для административных операций).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+    post:
+      tags:
+      - Пользователи
+      operationId: createAdminUser
+      summary: Создать сотрудника с временным паролем
+      security: *id001
+      requestBody:
+        required: true
+        description: Тело запроса JSON
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUserRequest'
+      responses:
+        '201':
+          description: Создан; temporaryPassword возвращается один раз.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreatedUserResponse'
+        '400': *id003
+        '401': *id002
+        '403': *id010
+        '409': &id011
+          description: Конфликт версии или уникальности.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+  /api/v1/admin/users/{id}:
+    delete:
+      tags:
+      - Пользователи
+      operationId: deleteAdminUser
+      summary: Удалить сотрудника по UUID
+      security: *id001
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Удалён
+        '400': *id003
+        '401': *id002
+        '403': *id010
+        '404': *id008
+        '409': *id011
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT access token из POST /api/v1/auth/login
+  schemas:
+    ApiErrorResponse:
+      type: object
+      description: Стандартный формат ошибки API.
+      properties:
+        status:
+          type: integer
+          format: int32
+          description: HTTP-статус ответа.
+          example: 401
+        error:
+          type: string
+          description: Стабильный машинный код ошибки.
+          example: INVALID_CREDENTIALS
+        message:
+          type: string
+          description: Человекочитаемое описание ошибки.
+          example: Неверный email или пароль
+        path:
+          type: string
+          description: Путь запроса, на котором произошла ошибка.
+          example: /api/v1/auth/login
+        timestamp:
+          type: string
+          format: date-time
+          description: Время формирования ошибки в ISO 8601 с часовым поясом.
+          example: '2026-10-24T18:30:00+03:00'
+      required:
+      - status
+      - error
+      - message
+      - path
+      - timestamp
+    AuthenticationResponse:
+      type: object
+      description: Аутентифицированный сотрудник и короткоживущий access-токен.
+      properties:
+        accessToken:
+          type: string
+          description: 'JWT access-токен для заголовка Authorization: Bearer.'
+        expiresIn:
+          type: integer
+          format: int64
+          description: Время жизни JWT access-токена в секундах.
+          example: 900
+        user:
+          $ref: '#/components/schemas/CurrentUserResponse'
+          description: Данные вошедшего сотрудника
+      required:
+      - accessToken
+      - expiresIn
+      - user
+    CurrentUserResponse:
+      type: object
+      description: Публичные данные текущего аутентифицированного сотрудника.
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: UUID сотрудника
+          example: 550e8400-e29b-41d4-a716-446655440000
+        login:
+          type: string
+          description: Логин сотрудника
+          example: admin
+        role:
+          type: string
+          description: Роль в приложении, заданная при заведении сотрудника.
+          example: ADMIN
+          enum:
+          - ADMIN
+          - EMPLOYEE
+        createdAt:
+          type: string
+          format: date-time
+          description: Время создания учётной записи с часовым поясом
+      required:
+      - id
+      - login
+      - role
+      - createdAt
+    LoginRequest:
+      type: object
+      description: Учётные данные заранее заведённого сотрудника.
+      properties:
+        login:
+          type: string
+          description: Логин сотрудника, от 4 до 255 символов.
+          example: admin
+          minLength: 3
+          maxLength: 255
+        password:
+          type: string
+          description: Пароль сотрудника. Никогда не возвращается API.
+          writeOnly: true
+          minLength: 1
+      required:
+      - login
+      - password
+    CreateUserRequest:
+      type: object
+      description: 'Реальный контракт текущего бэка: временный пароль генерируется сервером и выдаётся единожды,
+        password не принимается.'
+      properties:
+        login:
+          type: string
+          description: Логин сотрудника, от 4 до 255 символов
+          example: analyst
+          minLength: 3
+          maxLength: 255
+        role:
+          type: string
+          description: Роль сотрудника
+          enum:
+          - ADMIN
+          - EMPLOYEE
+          example: EMPLOYEE
+          default: EMPLOYEE
+        status:
+          type: string
+          description: Статус учётной записи
+          enum:
+          - ACTIVE
+          - DISABLED
+          example: ACTIVE
+          default: ACTIVE
+      required:
+      - login
+    CreatedUserResponse:
+      type: object
+      description: Созданный сотрудник и временный пароль. Пароль показывается только в этом ответе.
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: UUID созданного сотрудника
+        login:
+          type: string
+          description: Логин сотрудника
+          example: analyst
+        role:
+          type: string
+          description: Роль сотрудника
+          example: EMPLOYEE
+        status:
+          type: string
+          description: Статус учётной записи
+          example: ACTIVE
+        createdAt:
+          type: string
+          format: date-time
+          description: Время создания с часовым поясом
+        temporaryPassword:
+          type: string
+          description: Сервер генерирует пароль, возвращает один раз. Не кэшировать, не логировать.
+          readOnly: true
+          writeOnly: false
+      required:
+      - id
+      - login
+      - role
+      - status
+      - createdAt
+      - temporaryPassword
+    ChangePasswordRequest:
+      type: object
+      description: Смена пароля текущего сотрудника
+      properties:
+        currentPassword:
+          type: string
+          description: Действующий пароль
+          writeOnly: true
+        newPassword:
+          type: string
+          description: 'Новый пароль: 8–255 символов, строчная и заглавная буквы и цифра'
+          maxLength: 255
+          minLength: 8
+          writeOnly: true
+      required:
+      - currentPassword
+      - newPassword
+    AdminUserResponse:
+      type: object
+      description: Учётная запись сотрудника в административном разделе.
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: UUID сотрудника
+        login:
+          type: string
+          description: Логин сотрудника
+          example: employee
+        role:
+          type: string
+          description: Роль в приложении
+          example: EMPLOYEE
+          enum:
+          - ADMIN
+          - EMPLOYEE
+        status:
+          type: string
+          description: Статус учётной записи
+          example: ACTIVE
+          enum:
+          - ACTIVE
+          - DISABLED
+        createdAt:
+          type: string
+          format: date-time
+          description: Время создания с часовым поясом
+      required:
+      - id
+      - login
+      - role
+      - status
+      - createdAt
+    SnapshotRecord:
+      type: object
+      description: Запись истории загрузок снимков биллинга
+      properties:
+        id:
+          type: string
+          description: Уникальный ID снимка для скачивания
+          example: snapshot-550e8400-e29b-41d4-a716-446655440000
+        fileName:
+          type: string
+          description: Имя исходного файла
+          example: data.json
+        uploadedAt:
+          type: string
+          format: date-time
+          description: Время загрузки с часовым поясом
+          example: '2026-10-23T22:10:00+03:00'
+        uploadedBy:
+          type: string
+          description: Логин загрузившего сотрудника
+          example: analyst
+        clients:
+          type: integer
+          format: int32
+          description: Количество клиентов в снимке
+          example: 42
+          minimum: 1
+        services:
+          type: integer
+          format: int32
+          description: Количество услуг в снимке
+          example: 118
+          minimum: 0
+      required:
+      - id
+      - fileName
+      - uploadedAt
+      - uploadedBy
+      - clients
+      - services
+    Account:
+      type: object
+      description: Клиент биллинга. Денежные значения указаны в евроцентах.
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Уникальный ID клиента
+          example: 1
+          minimum: 1
+        email:
+          type: string
+          description: Email клиента
+          example: client@example.test
+          format: email
+        balance:
+          type: integer
+          format: int64
+          description: 'balance: целое количество евроцентов (100 = €1).'
+          example: 10000
+          minimum: 0
+        withdrawBalance:
+          type: integer
+          format: int64
+          description: 'withdrawBalance: целое количество евроцентов (100 = €1).'
+          example: 0
+          minimum: 0
+        totalReplenished:
+          type: integer
+          format: int64
+          description: 'totalReplenished: целое количество евроцентов (100 = €1).'
+          example: 10000
+          minimum: 0
+        bonusBalance:
+          type: integer
+          format: int64
+          description: 'bonusBalance: целое количество евроцентов (100 = €1).'
+          example: 0
+          minimum: 0
+        bonusState:
+          type: string
+          description: Статус бонусов
+          enum:
+          - locked
+          - unlocked
+          example: locked
+      required:
+      - id
+      - email
+      - balance
+      - withdrawBalance
+      - totalReplenished
+      - bonusBalance
+      - bonusState
+    Service:
+      type: object
+      description: Услуга клиента в снимке биллинга
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Уникальный ID услуги
+          example: 1
+          minimum: 1
+        name:
+          type: string
+          description: Название услуги
+          example: hosting-1
+        ownerId:
+          type: integer
+          format: int64
+          description: ID клиента-владельца
+          example: 1
+          minimum: 1
+        paymentTerm:
+          type: string
+          description: Платёжный период
+          enum:
+          - hour
+          - week
+          - month
+          - quarter_year
+          - half_year
+          - year
+          example: month
+        autoProlong:
+          type: boolean
+          description: Автопродление включено
+          example: true
+        createdAt:
+          type: string
+          format: date-time
+          description: Момент создания в UTC
+        expiresAt:
+          type: string
+          format: date-time
+          description: Момент окончания оплаченного периода в UTC
+        status:
+          type: string
+          description: suspended — услуга выключена, но тарификация продолжается; prolong_wait — ожидание оплаты
+            5 суток после expiresAt; deleted/blocked не могут быть продлены.
+          enum:
+          - active
+          - suspended
+          - prolong_wait
+          - deleted
+          - blocked
+          example: active
+        price:
+          type: integer
+          format: int64
+          description: Стоимость одного периода оплаты в евроцентах, НЕ цена в месяц.
+          example: 1200
+          minimum: 0
+      required:
+      - id
+      - name
+      - ownerId
+      - paymentTerm
+      - autoProlong
+      - createdAt
+      - expiresAt
+      - status
+      - price
+    Transaction:
+      type: object
+      description: Транзакция услуги в снимке биллинга
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Уникальный ID транзакции
+          example: 1
+          minimum: 1
+        amount:
+          type: integer
+          format: int32
+          description: Сумма операции в исходных единицах биллинга (евроценты); ТЗ не устанавливает верхнюю границу.
+          example: 100
+          minimum: 0
+        status:
+          type: string
+          description: Статус транзакции
+          enum:
+          - performed
+          - not_performed
+          example: performed
+        performedAt:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Время исполнения в UTC; null для not_performed
+        createdAt:
+          type: string
+          format: date-time
+          description: Время создания в UTC
+        type:
+          type: string
+          description: Тип операции
+          enum:
+          - prolong
+          - order
+          example: order
+        serviceId:
+          type: integer
+          format: int64
+          description: ID услуги
+          example: 1
+      required:
+      - id
+      - amount
+      - status
+      - performedAt
+      - createdAt
+      - type
+      - serviceId
+    RiskSnapshot:
+      type: object
+      description: 'Канонический исходный снимок из трёх массивов: accounts, services, transactions (transactions
+        может отсутствовать). Денежные значения — евроценты.'
+      properties:
+        accounts:
+          type: array
+          description: Клиенты биллинга; минимум один
+          items:
+            $ref: '#/components/schemas/Account'
+          minItems: 1
+        services:
+          type: array
+          description: Все услуги клиентов
+          items:
+            $ref: '#/components/schemas/Service'
+        transactions:
+          type: array
+          description: Транзакции; можно передать пустой массив
+          items:
+            $ref: '#/components/schemas/Transaction'
+          default: []
+      required:
+      - accounts
+      - services
+    CalculationDate:
+      type: object
+      description: 'Режим времени расчёта: current = серверное время, fixed = зафиксированный момент. Изменение
+        приводит к пересчёту.'
+      properties:
+        mode:
+          type: string
+          description: Режим расчёта
+          enum:
+          - current
+          - fixed
+          example: fixed
+        fixedAt:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Последний зафиксированный момент в UTC. Обязателен для fixed; в current может оставаться
+            прежним или быть null.
+          example: '2026-10-19T15:00:00Z'
+      required:
+      - mode
+      - fixedAt
+    FactorWeights:
+      type: object
+      description: 'Веса факторов риска: каждое значение от 0 до 100'
+      properties:
+        awaitingPayment:
+          type: integer
+          format: int32
+          description: Ожидание оплаты Вес экспертного фактора, 0–100 баллов.
+          example: 70
+          maximum: 100
+          minimum: 0
+        expiringWithoutAutoRenewal:
+          type: integer
+          format: int32
+          description: Истечение без автопродления Вес экспертного фактора, 0–100 баллов.
+          example: 50
+          maximum: 100
+          minimum: 0
+        insufficientFunds:
+          type: integer
+          format: int32
+          description: Недостаточно средств Вес экспертного фактора, 0–100 баллов.
+          example: 40
+          maximum: 100
+          minimum: 0
+        awaitingPaymentWithoutFunds:
+          type: integer
+          format: int32
+          description: Ожидание оплаты без средств Вес экспертного фактора, 0–100 баллов.
+          example: 30
+          maximum: 100
+          minimum: 0
+        disabledByClient:
+          type: integer
+          format: int32
+          description: Отключение клиентом Вес экспертного фактора, 0–100 баллов.
+          example: 15
+          maximum: 100
+          minimum: 0
+        bonusesExceedMoney:
+          type: integer
+          format: int32
+          description: Бонусов больше денег Вес экспертного фактора, 0–100 баллов.
+          example: 10
+          maximum: 100
+          minimum: 0
+      required:
+      - awaitingPayment
+      - expiringWithoutAutoRenewal
+      - insufficientFunds
+      - awaitingPaymentWithoutFunds
+      - disabledByClient
+      - bonusesExceedMoney
+      additionalProperties:
+        type: integer
+        minimum: 0
+        maximum: 100
+        description: 'Новый зарегистрированный признак: ключ признака -> экспертный вес'
+    RiskThresholds:
+      type: object
+      description: 'Порог LOW: score < medium; MEDIUM: medium <= score < high; HIGH: score >= high. Инвариант high
+        > medium.'
+      properties:
+        medium:
+          type: integer
+          format: int32
+          description: Минимальный score среднего риска
+          example: 40
+          maximum: 99
+          minimum: 1
+        high:
+          type: integer
+          format: int32
+          description: Минимальный score высокого риска
+          example: 70
+          maximum: 100
+          minimum: 2
+      required:
+      - medium
+      - high
+    FinanceSettings:
+      type: object
+      description: Учёт балансов и коэффициент потерь от 0 до 1 с шагом 0.05
+      properties:
+        bonusesAsMoney:
+          type: boolean
+          description: Учитывать доступные бонусы как деньги
+          example: true
+        referralBalanceAsMoney:
+          type: boolean
+          description: Учитывать реферальный баланс как деньги
+          example: false
+        balanceLossFactor:
+          type: number
+          format: double
+          description: Коэффициент потерь
+          example: 0.5
+          maximum: 1
+          minimum: 0
+          multipleOf: 0.05
+      required:
+      - bonusesAsMoney
+      - referralBalanceAsMoney
+      - balanceLossFactor
+    ForecastSettings:
+      type: object
+      description: Горизонт прогноза и интервал обновления
+      properties:
+        horizonDays:
+          type: integer
+          format: int32
+          description: Горизонт в днях
+          example: 5
+          maximum: 30
+          minimum: 1
+        recalculationIntervalMinutes:
+          type: integer
+          format: int32
+          description: Интервал обновления в минутах
+          example: 5
+          maximum: 60
+          minimum: 1
+      required:
+      - horizonDays
+      - recalculationIntervalMinutes
+    ModelSettingsValues:
+      type: object
+      description: Все группы параметров модели риска
+      properties:
+        factorWeights:
+          $ref: '#/components/schemas/FactorWeights'
+          description: Веса факторов риска
+        riskThresholds:
+          $ref: '#/components/schemas/RiskThresholds'
+          description: Пороги среднего и высокого риска
+        finance:
+          $ref: '#/components/schemas/FinanceSettings'
+          description: Правила учёта денег
+        forecast:
+          $ref: '#/components/schemas/ForecastSettings'
+          description: Параметры прогноза
+      required:
+      - factorWeights
+      - riskThresholds
+      - finance
+      - forecast
+    ModelSettings:
+      type: object
+      description: Полные настройки модели с версией и распределением score. Сохраняются в PostgreSQL, переживают
+        рестарт.
+      properties:
+        version:
+          type: integer
+          format: int64
+          description: Текущая версия
+          example: 1
+          minimum: 1
+        updatedAt:
+          type: string
+          format: date-time
+          description: Время последнего изменения с часовым поясом
+        updatedBy:
+          type: string
+          description: Логин изменившего сотрудника
+          example: admin
+        values:
+          $ref: '#/components/schemas/ModelSettingsValues'
+          description: Текущие значения
+        defaults:
+          $ref: '#/components/schemas/ModelSettingsValues'
+          description: Заводские значения
+        scoreHistogram:
+          type: array
+          description: '101 счётчик: корзины score от 0 до 100 включительно; NONE не включён.'
+          items:
+            type: integer
+            format: int32
+          minItems: 101
+          maxItems: 101
+        featureDefinitions:
+          type: array
+          description: Опциональный расширяемый каталог признаков для динамического отображения на фронте.
+          items:
+            type: object
+            required:
+            - key
+            - label
+            - description
+            properties:
+              key:
+                type: string
+              label:
+                type: string
+              description:
+                type: string
+      required:
+      - version
+      - updatedAt
+      - updatedBy
+      - values
+      - defaults
+      - scoreHistogram
+    SaveModelSettingsRequest:
+      type: object
+      description: Сохранение модели с проверкой версии из последнего GET
+      properties:
+        version:
+          type: integer
+          format: int64
+          description: Ожидаемая версия
+          example: 1
+          minimum: 1
+        values:
+          $ref: '#/components/schemas/ModelSettingsValues'
+          description: Новые значения всех параметров
+      required:
+      - version
+      - values
+    ModelSettingsConflict:
+      type: object
+      description: Конфликт версий с актуальной версией настроек
+      properties:
+        message:
+          type: string
+          description: Описание конфликта
+        current:
+          $ref: '#/components/schemas/ModelSettings'
+          description: Текущая версия настроек для повторного редактирования
+      required:
+      - message
+      - current
+    DashboardResponse:
+      type: object
+      description: Сводка главного экрана по последнему снимку биллинга. При отсутствии снимка содержит пустое состояние.
+      properties:
+        snapshot:
+          description: null, если данных пока нет; это корректное пустое состояние.
+          oneOf:
+          - $ref: '#/components/schemas/SnapshotInfo'
+          - type: 'null'
+        monthlyLoss:
+          type: number
+          description: Суммарная ожидаемая месячная потеря в евро, рассчитанная из тарифов, score и доступных средств.
+            Не прогноз с доказанной вероятностью.
+          example: 1296.9
+        riskBuckets:
+          type: array
+          description: 'Ровно четыре агрегата: high, medium, low и none.'
+          items:
+            $ref: '#/components/schemas/RiskBucket'
+        topRisk:
+          description: Клиент с наибольшей оценкой риска. null, если выделять некого.
+          oneOf:
+          - $ref: '#/components/schemas/TopRiskClient'
+          - type: 'null'
+        riskQueue:
+          $ref: '#/components/schemas/RiskQueue'
+          description: Первые пять клиентов, требующих внимания.
+        lossReasons:
+          type: array
+          description: Причины ожидаемых потерь, отсортированные по убыванию суммы.
+          items:
+            $ref: '#/components/schemas/LossReason'
+        churn:
+          $ref: '#/components/schemas/ChurnForecast'
+          description: Факт удалений и прогноз непродлений услуг по неделям.
+      required:
+      - snapshot
+      - monthlyLoss
+      - riskBuckets
+      - topRisk
+      - riskQueue
+      - lossReasons
+      - churn
+    ChurnForecast:
+      type: object
+      description: Динамика удалений и прогноз непродлений услуг.
+      properties:
+        atRiskServices:
+          type: integer
+          format: int32
+          description: Количество услуг с риском прямо сейчас.
+          example: 58
+          minimum: 0
+        weeks:
+          type: array
+          description: Массив недель для графика. При одном снимке исторический факт недоступен; пустой массив допустим.
+          items:
+            $ref: '#/components/schemas/ChurnWeek'
+      required:
+      - atRiskServices
+      - weeks
+    ChurnWeek:
+      type: object
+      description: Показатель оттока услуг за одну календарную неделю.
+      properties:
+        weekStart:
+          type: string
+          format: date
+          description: Понедельник недели в ISO 8601.
+          example: '2026-10-26'
+        kind:
+          type: string
+          description: fact — НАБЛЮДАЕМАЯ динамика между сохранёнными снимками; нельзя утверждать точную дату удаления
+            без истории статусов. forecast — модельный прогноз.
+          enum:
+          - fact
+          - forecast
+          example: forecast
+        services:
+          type: integer
+          format: int32
+          description: Количество услуг.
+          example: 18
+          minimum: 0
+      required:
+      - weekStart
+      - kind
+      - services
+    ClientBalance:
+      type: object
+      description: Средства клиента и сумма ближайших продлений.
+      properties:
+        available:
+          type: number
+          description: Только основной баланс account.balance / 100, евро; отличается от ClientCardBalance.available,
+            где применяются настройки бонусов/рефералки.
+          example: 0.0
+        required:
+          type: number
+          description: Сумма, нужная на продления в ближайшие дни.
+          example: 28.8
+      required:
+      - available
+      - required
+    LossReason:
+      type: object
+      description: Потери, сгруппированные по главной причине риска.
+      properties:
+        id:
+          type: string
+          description: Стабильный код причины.
+          example: awaiting-payment
+        label:
+          type: string
+          description: Человекочитаемое название причины.
+          example: Ожидает оплаты
+        level:
+          type: string
+          description: none — нет оценки (нет живых услуг), а не score=0.
+          enum: *id012
+          example: high
+        clients:
+          type: integer
+          format: int32
+          description: Количество клиентов, учтённых по этой причине.
+          example: 16
+          minimum: 0
+        monthlyLoss:
+          type: number
+          description: Суммарные ожидаемые ежемесячные потери.
+          example: 612.4
+      required:
+      - id
+      - label
+      - level
+      - clients
+      - monthlyLoss
+    RiskBucket:
+      type: object
+      description: Агрегат клиентов одного уровня риска.
+      properties:
+        level:
+          type: string
+          description: none — нет оценки (нет живых услуг), а не score=0.
+          enum: *id012
+          example: high
+        clients:
+          type: integer
+          format: int32
+          description: Количество клиентов этого уровня.
+          example: 13
+          minimum: 0
+        monthlyLoss:
+          type:
+          - number
+          - 'null'
+          description: Ожидаемые ежемесячные потери клиентов уровня. Для none всегда null.
+          example: 854.5
+        changed:
+          type: boolean
+          description: Изменилась ли сумма потерь относительно предыдущего снимка.
+      required:
+      - level
+      - clients
+      - monthlyLoss
+      - changed
+    RiskClient:
+      type: object
+      description: Клиент в очереди внимания.
+      properties:
+        id:
+          type: string
+          description: ID клиента в биллинге.
+          example: '1321245'
+        email:
+          type: string
+          description: Email клиента.
+          example: client5@mail.ru
+        score:
+          type:
+          - number
+          - 'null'
+          format: double
+          description: Экспертный индекс риска 0–100, НЕ вероятность. null = недостаточно оснований для оценки (например,
+            нет живых услуг).
+          example: 94.2
+          maximum: 100
+          minimum: 0
+        level:
+          type: string
+          description: none — нет оценки (нет живых услуг), а не score=0.
+          enum: *id012
+          example: high
+        reason:
+          type:
+          - string
+          - 'null'
+          description: Главная человекочитаемая причина риска.
+          example: Ожидает оплаты
+        monthlyLoss:
+          type: number
+          description: Ожидаемая ежемесячная потеря, если клиент уйдёт.
+          example: 14.4
+        lossChanged:
+          type: boolean
+          description: Изменилась ли потеря относительно предыдущего снимка.
+      required:
+      - id
+      - email
+      - score
+      - level
+      - reason
+      - monthlyLoss
+      - lossChanged
+    RiskQueue:
+      type: object
+      description: Короткая очередь клиентов, требующих внимания.
+      properties:
+        total:
+          type: integer
+          format: int32
+          description: Общее количество клиентов в последнем снимке.
+          example: 42
+          minimum: 0
+        items:
+          type: array
+          description: Не более пяти клиентов с наибольшей оценкой риска.
+          items:
+            $ref: '#/components/schemas/RiskClient'
+      required:
+      - total
+      - items
+    ScoreFactor:
+      type: object
+      description: Фактор, сформировавший оценку риска клиента.
+      properties:
+        id:
+          type: string
+          description: Стабильный код фактора.
+          example: awaiting-payment
+        label:
+          type: string
+          description: Готовое к показу название фактора.
+          example: Ожидает оплаты
+        points:
+          type: number
+          format: double
+          description: Вклад фактора в score конкретной услуги, может суммарно превысить 100 до отсечения. Отдельные
+            вклады всех услуг не обязаны суммироваться в score клиента.
+          example: 70
+          maximum: 100
+          minimum: 0
+      required:
+      - id
+      - label
+      - points
+    SnapshotInfo:
+      type: object
+      description: Снимок биллинга, по которому рассчитан ответ.
+      properties:
+        id:
+          type: string
+          description: Идентификатор снимка.
+          example: snapshot-2026-10-23
+        takenAt:
+          type: string
+          format: date-time
+          description: Время формирования снимка в ISO 8601 с часовым поясом.
+          example: '2026-10-23T22:10:00+03:00'
+      required:
+      - id
+      - takenAt
+    TopRiskClient:
+      type: object
+      description: Самый рискованный клиент с расшифровкой оценки и потребности в средствах.
+      properties:
+        id:
+          type: string
+          description: ID клиента в биллинге.
+          example: '1321245'
+        email:
+          type: string
+          description: Email клиента.
+          example: client5@mail.ru
+        score:
+          type:
+          - number
+          - 'null'
+          format: double
+          description: Экспертный индекс риска 0–100, НЕ вероятность. null = недостаточно оснований для оценки (например,
+            нет живых услуг).
+          example: 94.2
+          maximum: 100
+          minimum: 0
+        level:
+          type: string
+          description: none — нет оценки (нет живых услуг), а не score=0.
+          enum: *id012
+          example: high
+        reason:
+          type:
+          - string
+          - 'null'
+          description: Главная человекочитаемая причина риска.
+          example: Ожидает оплаты
+        monthlyLoss:
+          type: number
+          description: Ожидаемая ежемесячная потеря, если клиент уйдёт.
+          example: 14.4
+        lossChanged:
+          type: boolean
+          description: Изменилась ли потеря относительно предыдущего снимка.
+        factors:
+          type: array
+          description: Положительные факторы оценки, упорядоченные по вкладу.
+          items:
+            $ref: '#/components/schemas/ScoreFactor'
+        balance:
+          $ref: '#/components/schemas/ClientBalance'
+          description: Текущий доступный баланс и сумма, нужная для ближайших продлений.
+      required:
+      - id
+      - email
+      - score
+      - level
+      - reason
+      - monthlyLoss
+      - lossChanged
+      - factors
+      - balance
+    ClientListItem:
+      type: object
+      description: Строка сводной таблицы клиентов.
+      properties:
+        id:
+          type: string
+          description: ID клиента в биллинге.
+          example: '1321245'
+        email:
+          type: string
+          description: Email клиента.
+          example: client5@mail.ru
+        score:
+          type:
+          - number
+          - 'null'
+          format: double
+          description: Экспертный индекс риска 0–100, НЕ вероятность. null = недостаточно оснований для оценки (например,
+            нет живых услуг).
+          example: 94.2
+          maximum: 100
+          minimum: 0
+        level:
+          type: string
+          description: none — нет оценки (нет живых услуг), а не score=0.
+          enum: *id012
+          example: high
+        reason:
+          type:
+          - string
+          - 'null'
+          description: Главная причина риска. null, если причины нет.
+          example: Ожидает оплаты
+        balance:
+          type: number
+          description: balance / 100, евро; основной баланс.
+          example: 6.48
+        topUp:
+          type: number
+          description: totalReplenished / 100, евро, сумма пополнений за всё время; используется в обязательной
+            сортировке.
+          example: 148.0
+          minimum: 0
+        monthlyLoss:
+          type: number
+          description: Оценка ожидаемых потерь выручки в месяц в евро, не фактический убыток.
+          example: 6.77
+      required:
+      - id
+      - email
+      - score
+      - level
+      - reason
+      - balance
+      - topUp
+      - monthlyLoss
+    ClientsResponse:
+      type: object
+      description: Страница сводной таблицы клиентов.
+      properties:
+        items:
+          type: array
+          description: Клиенты на возвращённой странице.
+          items:
+            $ref: '#/components/schemas/ClientListItem'
+        page:
+          type: integer
+          format: int32
+          description: Фактически возвращённый номер страницы, начиная с 1.
+          example: 1
+          minimum: 1
+        pageSize:
+          type: integer
+          format: int32
+          description: Размер страницы.
+          example: 12
+          maximum: 100
+          minimum: 1
+        total:
+          type: integer
+          format: int32
+          description: Общее количество клиентов, найденных по поиску или фильтру.
+          example: 42
+          minimum: 0
+        levelCounts:
+          $ref: '#/components/schemas/LevelCounts'
+          description: Количество клиентов каждого уровня во всём снимке. Не зависит от фильтра и поиска.
+      required:
+      - items
+      - page
+      - pageSize
+      - total
+      - levelCounts
+    LevelCounts:
+      type: object
+      description: Количество клиентов по уровням риска во всём последнем снимке.
+      properties:
+        high:
+          type: integer
+          format: int32
+          description: Количество клиентов высокого риска.
+          example: 13
+          minimum: 0
+        medium:
+          type: integer
+          format: int32
+          description: Количество клиентов среднего риска.
+          example: 14
+          minimum: 0
+        low:
+          type: integer
+          format: int32
+          description: Количество клиентов низкого риска.
+          example: 9
+          minimum: 0
+        none:
+          type: integer
+          format: int32
+          description: Количество клиентов без оценки.
+          example: 6
+          minimum: 0
+      required:
+      - high
+      - medium
+      - low
+      - none
+    ClientCard:
+      type: object
+      description: Карточка клиента из активного снимка
+      properties:
+        id:
+          type: string
+          description: ID клиента
+          example: '1'
+        email:
+          type: string
+          description: Адрес клиента
+          example: client@example.test
+        score:
+          type:
+          - number
+          - 'null'
+          format: double
+          description: Экспертный индекс риска 0–100, НЕ вероятность. null = недостаточно оснований для оценки (например,
+            нет живых услуг).
+          minimum: 0
+          maximum: 100
+        level:
+          type: string
+          description: none — нет оценки (нет живых услуг), а не score=0.
+          enum: *id012
+        factors:
+          type: array
+          description: Действующие факторы услуги(услуг). Индекс клиента — максимум score по живым услугам, НЕ сумма
+            по всем факторам всех услуг.
+          items:
+            $ref: '#/components/schemas/ClientFactor'
+        balance:
+          $ref: '#/components/schemas/ClientCardBalance'
+          description: Баланс и ожидаемые потери
+        services:
+          type: array
+          description: Услуги клиента
+          items:
+            $ref: '#/components/schemas/ClientService'
+        lossBreakdown:
+          $ref: '#/components/schemas/LossBreakdown'
+          description: Состав ожидаемых потерь
+      required:
+      - id
+      - email
+      - score
+      - level
+      - factors
+      - balance
+      - services
+      - lossBreakdown
+    ClientCardBalance:
+      type: object
+      description: Денежная позиция клиента в евро
+      properties:
+        available:
+          type: number
+          description: Доступные для модели средства, включая применимые бонусы/рефералку по настройкам; в евро.
+            НЕ обязательно совпадает с основным балансом.
+          example: 120.0
+        required:
+          type:
+          - number
+          - 'null'
+          description: Потребность в продлениях на горизонте forecast.horizonDays, евро; null = оценивать нечего.
+        monthlyLoss:
+          type: number
+          description: Ожидаемые ежемесячные потери
+          example: 35.5
+        bonus:
+          type: number
+          minimum: 0
+          description: bonusBalance / 100 (евро). Учитывается в покрытии продления только при bonusState=unlocked
+            и finance.bonusesAsMoney=true.
+        referral:
+          type: number
+          minimum: 0
+          description: withdrawBalance / 100 (евро), справочно; использовать в покрытии только при finance.referralBalanceAsMoney=true.
+      required:
+      - available
+      - bonus
+      - referral
+      - required
+      - monthlyLoss
+    ClientFactor:
+      type: object
+      description: Фактор, повлиявший на оценку клиента
+      properties:
+        id:
+          type: string
+          description: Стабильный код фактора
+          example: insufficient_funds
+        label:
+          type: string
+          description: Пояснение для пользователя
+        points:
+          type: number
+          format: double
+          description: Вклад фактора в score
+          example: 40
+          minimum: 0
+      required:
+      - id
+      - label
+      - points
+    ClientService:
+      type: object
+      description: Услуга клиента с оценкой риска и ближайшим событием
+      properties:
+        id:
+          type: string
+          description: ID услуги
+          example: '12'
+        name:
+          type: string
+          description: Название услуги
+        score:
+          type:
+          - number
+          - 'null'
+          format: double
+          description: Экспертный индекс риска 0–100, НЕ вероятность. null = недостаточно оснований для оценки (например,
+            нет живых услуг).
+          minimum: 0
+          maximum: 100
+        level:
+          type: string
+          description: none — нет оценки (нет живых услуг), а не score=0.
+          enum: *id012
+        status:
+          type: string
+          description: 'Статус представления UI: prolong_wait -> awaiting_payment; suspended -> disabled_by_client.'
+          example: active
+          enum:
+          - awaiting_payment
+          - active
+          - disabled_by_client
+          - deleted
+          - blocked
+        monthlyPrice:
+          type:
+          - number
+          - 'null'
+          description: Стоимость в месяц в евро или null для неактивной услуги
+        event:
+          description: Следующее событие или null
+          oneOf:
+          - $ref: '#/components/schemas/ClientServiceEvent'
+          - type: 'null'
+        autoRenew:
+          type:
+          - boolean
+          - 'null'
+          description: Автопродление или null для неактивной услуги
+      required:
+      - id
+      - name
+      - score
+      - level
+      - status
+      - monthlyPrice
+      - event
+      - autoRenew
+    ClientServiceEvent:
+      type: object
+      description: Ближайшее событие услуги
+      properties:
+        type:
+          type: string
+          description: Ближайшее событие; для отсутствующего достоверного события поле event клиента равно null.
+          enum:
+          - renew
+          - expire
+          - delete
+        date:
+          type: string
+          format: date
+          description: Дата события в UTC
+          example: '2026-10-24'
+      required:
+      - type
+      - date
+    LossBreakdown:
+      type: object
+      description: Расшифровка ожидаемых потерь по услугам
+      properties:
+        k:
+          type: number
+          format: double
+          description: Коэффициент потерь из настроек модели
+          example: 0.5
+        uncoveredShare:
+          type: number
+          format: double
+          description: Доля нехватки средств от 0 до 1
+          example: 0.3
+        items:
+          type: array
+          description: Вклад каждой услуги
+          items:
+            $ref: '#/components/schemas/LossBreakdownItem'
+        horizonDays:
+          type: integer
+          minimum: 1
+          maximum: 30
+          description: Горизонт расчёта потребности по настройкам модели (сейчас отсутствует в DTO бэка; требуется
+            добавить).
+      required:
+      - k
+      - uncoveredShare
+      - horizonDays
+      - items
+    LossBreakdownItem:
+      type: object
+      description: Вклад услуги в ожидаемые ежемесячные потери
+      properties:
+        serviceId:
+          type: string
+          description: ID услуги
+        serviceName:
+          type: string
+          description: Название услуги
+        monthlyPrice:
+          type: number
+          description: Стоимость в месяц в евро
+        risk:
+          type: number
+          format: double
+          description: Нормализованная оценка риска от 0 до 1
+        loss:
+          type: number
+          description: Ожидаемая потеря в месяц в евро
+      required:
+      - serviceId
+      - serviceName
+      - monthlyPrice
+      - risk
+      - loss
+    ClientPosition:
+      type: object
+      description: Позиция клиента в текущем отфильтрованном и отсортированном списке
+      properties:
+        index:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Номер с 1; null, если клиент не прошёл фильтр
+          minimum: 1
+        total:
+          type: integer
+          format: int32
+          description: Число клиентов после фильтрации
+        prevId:
+          type:
+          - string
+          - 'null'
+          description: ID предыдущего клиента или null
+        nextId:
+          type:
+          - string
+          - 'null'
+          description: ID следующего клиента или null
+      required:
+      - index
+      - total
+      - prevId
+      - nextId
+    NestedBillingService:
+      type: object
+      description: Услуга, вложенная в клиента; ownerId можно не указывать, сервер использует id клиента.
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Уникальный ID услуги
+          example: 1
+          minimum: 1
+        name:
+          type: string
+          description: Название услуги
+          example: hosting-1
+        ownerId:
+          type: integer
+          format: int64
+          description: ID клиента-владельца
+          example: 1
+          minimum: 1
+        paymentTerm:
+          type: string
+          description: Платёжный период
+          enum:
+          - hour
+          - week
+          - month
+          - quarter_year
+          - half_year
+          - year
+          example: month
+        autoProlong:
+          type: boolean
+          description: Автопродление включено
+          example: true
+        createdAt:
+          type: string
+          format: date-time
+          description: Момент создания в UTC
+        expiresAt:
+          type: string
+          format: date-time
+          description: Момент окончания оплаченного периода в UTC
+        status:
+          type: string
+          description: suspended — услуга выключена, но тарификация продолжается; prolong_wait — ожидание оплаты
+            5 суток после expiresAt; deleted/blocked не могут быть продлены.
+          enum:
+          - active
+          - suspended
+          - prolong_wait
+          - deleted
+          - blocked
+          example: active
+        price:
+          type: integer
+          format: int64
+          description: Стоимость одного периода оплаты в евроцентах, НЕ цена в месяц.
+          example: 1200
+          minimum: 0
+      required:
+      - id
+      - name
+      - paymentTerm
+      - autoProlong
+      - createdAt
+      - expiresAt
+      - status
+      - price
+    NestedBillingAccount:
+      type: object
+      description: Клиент со вложенными услугами — альтернативный формат импорта фронтенда.
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Уникальный ID клиента
+          example: 1
+          minimum: 1
+        email:
+          type: string
+          description: Email клиента
+          example: client@example.test
+          format: email
+        balance:
+          type: integer
+          format: int64
+          description: 'balance: целое количество евроцентов (100 = €1).'
+          example: 10000
+          minimum: 0
+        withdrawBalance:
+          type: integer
+          format: int64
+          description: 'withdrawBalance: целое количество евроцентов (100 = €1).'
+          example: 0
+          minimum: 0
+        totalReplenished:
+          type: integer
+          format: int64
+          description: 'totalReplenished: целое количество евроцентов (100 = €1).'
+          example: 10000
+          minimum: 0
+        bonusBalance:
+          type: integer
+          format: int64
+          description: 'bonusBalance: целое количество евроцентов (100 = €1).'
+          example: 0
+          minimum: 0
+        bonusState:
+          type: string
+          description: Статус бонусов
+          enum:
+          - locked
+          - unlocked
+          example: locked
+        services:
+          type: array
+          items:
+            $ref: '#/components/schemas/NestedBillingService'
+      required:
+      - id
+      - email
+      - balance
+      - withdrawBalance
+      - totalReplenished
+      - bonusBalance
+      - bonusState
+      - services
+    NestedRiskSnapshot:
+      type: object
+      required:
+      - clients
+      description: 'Дополнительно поддерживаемый бэком формат {clients: [{...account, services:[...]}], transactions:[...]}.'
+      properties:
+        clients:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/NestedBillingAccount'
+        transactions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Transaction'
+          default: []
+    SourceSnapshot:
+      oneOf:
+      - $ref: '#/components/schemas/RiskSnapshot'
+      - $ref: '#/components/schemas/NestedRiskSnapshot'
+      description: Один из двух реально поддерживаемых форматов загрузки. Канонический формат ТЗ — RiskSnapshot.
+        При работе из браузера передаётся файл как application/json целиком, НЕ multipart.
+    PatchFactorWeights:
+      type: object
+      description: 'Веса факторов риска: каждое значение от 0 до 100'
+      properties:
+        awaitingPayment:
+          type: integer
+          format: int32
+          description: Ожидание оплаты Вес экспертного фактора, 0–100 баллов.
+          example: 70
+          maximum: 100
+          minimum: 0
+        expiringWithoutAutoRenewal:
+          type: integer
+          format: int32
+          description: Истечение без автопродления Вес экспертного фактора, 0–100 баллов.
+          example: 50
+          maximum: 100
+          minimum: 0
+        insufficientFunds:
+          type: integer
+          format: int32
+          description: Недостаточно средств Вес экспертного фактора, 0–100 баллов.
+          example: 40
+          maximum: 100
+          minimum: 0
+        awaitingPaymentWithoutFunds:
+          type: integer
+          format: int32
+          description: Ожидание оплаты без средств Вес экспертного фактора, 0–100 баллов.
+          example: 30
+          maximum: 100
+          minimum: 0
+        disabledByClient:
+          type: integer
+          format: int32
+          description: Отключение клиентом Вес экспертного фактора, 0–100 баллов.
+          example: 15
+          maximum: 100
+          minimum: 0
+        bonusesExceedMoney:
+          type: integer
+          format: int32
+          description: Бонусов больше денег Вес экспертного фактора, 0–100 баллов.
+          example: 10
+          maximum: 100
+          minimum: 0
+      additionalProperties:
+        type: integer
+        minimum: 0
+        maximum: 100
+        description: 'Новый зарегистрированный признак: ключ признака -> экспертный вес'
+      minProperties: 1
+    PatchRiskThresholds:
+      type: object
+      description: 'Порог LOW: score < medium; MEDIUM: medium <= score < high; HIGH: score >= high. Инвариант high
+        > medium.'
+      properties:
+        medium:
+          type: integer
+          format: int32
+          description: Минимальный score среднего риска
+          example: 40
+          maximum: 99
+          minimum: 1
+        high:
+          type: integer
+          format: int32
+          description: Минимальный score высокого риска
+          example: 70
+          maximum: 100
+          minimum: 2
+      minProperties: 1
+    PatchFinanceSettings:
+      type: object
+      description: Учёт балансов и коэффициент потерь от 0 до 1 с шагом 0.05
+      properties:
+        bonusesAsMoney:
+          type: boolean
+          description: Учитывать доступные бонусы как деньги
+          example: true
+        referralBalanceAsMoney:
+          type: boolean
+          description: Учитывать реферальный баланс как деньги
+          example: false
+        balanceLossFactor:
+          type: number
+          format: double
+          description: Коэффициент потерь
+          example: 0.5
+          maximum: 1
+          minimum: 0
+          multipleOf: 0.05
+      minProperties: 1
+    PatchForecastSettings:
+      type: object
+      description: Горизонт прогноза и интервал обновления
+      properties:
+        horizonDays:
+          type: integer
+          format: int32
+          description: Горизонт в днях
+          example: 5
+          maximum: 30
+          minimum: 1
+        recalculationIntervalMinutes:
+          type: integer
+          format: int32
+          description: Интервал обновления в минутах
+          example: 5
+          maximum: 60
+          minimum: 1
+      minProperties: 1
+    ModelSettingsChanges:
+      type: object
+      minProperties: 1
+      additionalProperties: false
+      properties:
+        factorWeights:
+          $ref: '#/components/schemas/PatchFactorWeights'
+        riskThresholds:
+          $ref: '#/components/schemas/PatchRiskThresholds'
+        finance:
+          $ref: '#/components/schemas/PatchFinanceSettings'
+        forecast:
+          $ref: '#/components/schemas/PatchForecastSettings'
+    PatchModelSettingsRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - version
+      - changes
+      description: Оптимистическая блокировка. version обязателен; changes содержит только редактируемые группы/поля.
+        Частичный PATCH объединяется с текущими настройками и запускает пересчёт.
+      properties:
+        version:
+          type: integer
+          format: int64
+          minimum: 1
+        changes:
+          $ref: '#/components/schemas/ModelSettingsChanges'

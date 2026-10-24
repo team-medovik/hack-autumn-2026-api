@@ -91,12 +91,12 @@ class AuthenticationExceptionHandler {
     @ExceptionHandler(HttpMessageNotReadableException::class)
     fun unreadableBody(exception: HttpMessageNotReadableException, request: HttpServletRequest) = error(
         status = if (request.requestURI in setOf(
-                "/api/v1/settings/model", "/api/v1/settings/calculation-date", "/api/v1/snapshots"
+                "/api/v1/settings/model", "/api/v1/model/settings", "/api/v1/source/snapshot", "/api/v1/settings/calculation-date", "/api/v1/snapshots"
             )) {
             HttpStatus.UNPROCESSABLE_ENTITY
         } else HttpStatus.BAD_REQUEST,
         code = if (request.requestURI in setOf(
-                "/api/v1/settings/model", "/api/v1/settings/calculation-date", "/api/v1/snapshots"
+                "/api/v1/settings/model", "/api/v1/model/settings", "/api/v1/source/snapshot", "/api/v1/settings/calculation-date", "/api/v1/snapshots"
             )) "UNPROCESSABLE_ENTITY" else "INVALID_REQUEST",
         message = "Некорректное тело запроса",
         request = request,
