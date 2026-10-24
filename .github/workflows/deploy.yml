@@ -277,15 +277,15 @@ jobs:
 
           ARTIFACT_KEY="${{ needs.build.outputs.artifact_key }}"
 
-          DEPLOY_UID="$(id -u "$BUILD_USER")"
-          DEPLOY_GID="$(id -g "$BUILD_USER")"
+          RUNNER_UID="$(id -u)"
+          RUNNER_GID="$(id -g)"
 
           sudo rm -rf "$JAR_DIR"
-          sudo install -d -o "$DEPLOY_UID" -g "$DEPLOY_GID" -m 750 "$JAR_DIR"
+          sudo install -d -o "$RUNNER_UID" -g "$RUNNER_GID" -m 750 "$JAR_DIR"
 
           docker run --rm \
             --network host \
-            --user "${DEPLOY_UID}:${DEPLOY_GID}" \
+            --user "${RUNNER_UID}:${RUNNER_GID}" \
             -v "$JAR_DIR:/download" \
             -e MC_CONFIG_DIR=/tmp/.mc \
             -e MINIO_ENDPOINT="$MINIO_ENDPOINT" \
