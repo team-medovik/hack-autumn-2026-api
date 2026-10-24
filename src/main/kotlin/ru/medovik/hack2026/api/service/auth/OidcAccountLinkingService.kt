@@ -35,7 +35,7 @@ class OidcAccountLinkingService(
         if (email.isNullOrBlank() || !emailVerified) {
             throw AccessDeniedException("OIDC-провайдер не подтвердил email")
         }
-        val account = accounts.findActiveByEmail(email.trim().lowercase())
+        val account = accounts.findActiveByLogin(email.trim().lowercase())
             ?: throw AccessDeniedException("Учётная запись сотрудника не найдена или отключена")
 
         identities.findByUserAccountId(account.id)?.let {

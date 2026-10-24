@@ -6,20 +6,22 @@ import jakarta.servlet.http.HttpServletResponse
 import org.slf4j.LoggerFactory
 import org.slf4j.MDC
 import org.springframework.core.annotation.Order
+import org.springframework.core.Ordered
 import org.springframework.stereotype.Component
 import org.springframework.web.filter.OncePerRequestFilter
 import java.util.UUID
 
 @Component
-@Order(100)
+@Order(Ordered.HIGHEST_PRECEDENCE + 10)
 class RequestLoggingFilter : OncePerRequestFilter() {
     @Suppress("PROPERTY_HIDES_JAVA_FIELD")
     private val logger = LoggerFactory.getLogger(javaClass)
 
     override fun shouldNotFilter(request: HttpServletRequest): Boolean =
-        request.requestURI.contains("/api/v1/docs") ||
-        request.requestURI.contains("/swagger") ||
-        request.requestURI.contains("/actuator")
+        request.requestURI.startsWith("/api/v1/docs") ||
+        request.requestURI.startsWith("/api/v1/swagger") ||
+        request.requestURI.startsWith("/swagger") ||
+        request.requestURI.startsWith("/actuator")
 
     override fun doFilterInternal(
         request: HttpServletRequest,
@@ -27,7 +29,7 @@ class RequestLoggingFilter : OncePerRequestFilter() {
         filterChain: FilterChain,
     ) {
         val requestId = request.getHeader("X-Request-ID")
-            ?.takeIf { it.length in 1..128 }
+            ?.takeIf { REQUEST_ID.matches(it) }
             ?: UUID.randomUUID().toString()
         val started = System.nanoTime()
         MDC.put("requestId", requestId)
@@ -36,14 +38,28 @@ class RequestLoggingFilter : OncePerRequestFilter() {
             filterChain.doFilter(request, response)
         } finally {
             val elapsedMs = (System.nanoTime() - started) / 1_000_000
-            logger.info(
-                "HTTP request completed: method={}, path={}, status={}, durationMs={}",
-                request.method,
-                request.requestURI,
-                response.status,
-                elapsedMs,
-            )
+            val message = "HTTP request completed: method={}, path={}, status={}, durationMs={}"
+            when {
+                response.status >= 500 -> logger.error(
+                    message, request.method, request.requestURI, response.status, elapsedMs,
+                )
+                response.status >= 400 -> logger.warn(
+                    message, request.method, request.requestURI, response.status, elapsedMs,
+                )
+                request.method in setOf("POST", "PUT", "PATCH", "DELETE") || elapsedMs >= SLOW_REQUEST_MS ->
+                    logger.info(
+                        message, request.method, request.requestURI, response.status, elapsedMs,
+                    )
+                else -> logger.debug(
+                    message, request.method, request.requestURI, response.status, elapsedMs,
+                )
+            }
             MDC.remove("requestId")
         }
+    }
+
+    private companion object {
+        val REQUEST_ID = Regex("[A-Za-z0-9._-]{1,128}")
+        const val SLOW_REQUEST_MS = 1_000L
     }
 }

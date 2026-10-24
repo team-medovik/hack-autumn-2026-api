@@ -2,6 +2,7 @@ package ru.medovik.hack2026.api.repository.dashboard
 
 import org.jooq.DSLContext
 import org.springframework.stereotype.Repository
+import ru.medovik.hack2026.api.dto.response.snapshot.SnapshotRecord
 import ru.medovik.hack2026.api.jooq.tables.references.BILLING_SNAPSHOTS
 import ru.medovik.hack2026.api.jooq.tables.records.BillingSnapshotsRecord
 import java.time.DayOfWeek
@@ -12,9 +13,54 @@ import java.time.temporal.TemporalAdjusters
 class BillingSnapshotRepository(
     private val dsl: DSLContext,
 ) {
+    fun listRecords(): List<SnapshotRecord> = dsl.selectFrom(BILLING_SNAPSHOTS)
+        .orderBy(
+            BILLING_SNAPSHOTS.CREATED_AT.desc(),
+            BILLING_SNAPSHOTS.TAKEN_AT.desc(),
+            BILLING_SNAPSHOTS.ID.desc(),
+        )
+        .fetch()
+        .map { record ->
+            SnapshotRecord(
+                id = requireNotNull(record.id),
+                fileName = requireNotNull(record.fileName),
+                uploadedAt = requireNotNull(record.createdAt),
+                uploadedBy = requireNotNull(record.uploadedBy),
+                clients = requireNotNull(record.clientsCount),
+                services = requireNotNull(record.servicesCount),
+            )
+        }
+
+    fun file(id: String): Pair<String, ByteArray>? = dsl.selectFrom(BILLING_SNAPSHOTS)
+        .where(BILLING_SNAPSHOTS.ID.eq(id))
+        .fetchOne()
+        ?.let { record ->
+            requireNotNull(record.fileName) to (record.rawFile ?: requireNotNull(record.payload).data().toByteArray())
+        }
+
+    fun insert(record: SnapshotRecord, payload: String, rawFile: ByteArray) {
+        check(dsl.execute(
+            """INSERT INTO billing_snapshots
+                (id, taken_at, created_at, payload, file_name, uploaded_by, clients_count, services_count, raw_file)
+                VALUES (?, ?, ?, CAST(? AS jsonb), ?, ?, ?, ?, ?)""",
+            record.id,
+            record.uploadedAt,
+            record.uploadedAt,
+            payload,
+            record.fileName,
+            record.uploadedBy,
+            record.clients,
+            record.services,
+            rawFile,
+        ) == 1) { "Не удалось сохранить снимок" }
+    }
     fun findLatest(): StoredBillingSnapshot? = dsl
         .selectFrom(BILLING_SNAPSHOTS)
-        .orderBy(BILLING_SNAPSHOTS.TAKEN_AT.desc(), BILLING_SNAPSHOTS.ID.desc())
+        .orderBy(
+            BILLING_SNAPSHOTS.CREATED_AT.desc(),
+            BILLING_SNAPSHOTS.TAKEN_AT.desc(),
+            BILLING_SNAPSHOTS.ID.desc(),
+        )
         .limit(1)
         .fetchOne()
         ?.toStored()

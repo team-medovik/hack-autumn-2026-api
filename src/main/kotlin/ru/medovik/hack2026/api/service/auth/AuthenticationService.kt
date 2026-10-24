@@ -7,10 +7,13 @@ import org.springframework.http.ResponseCookie
 import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.stereotype.Service
 import ru.medovik.hack2026.api.dto.request.auth.LoginRequest
+import ru.medovik.hack2026.api.dto.request.auth.ChangePasswordRequest
 import ru.medovik.hack2026.api.dto.response.auth.AuthenticationResponse
 import ru.medovik.hack2026.api.dto.response.auth.CurrentUserResponse
 import ru.medovik.hack2026.api.exception.AuthenticationException
 import ru.medovik.hack2026.api.exception.UserNotFoundException
+import ru.medovik.hack2026.api.exception.InvalidCurrentPasswordException
+import ru.medovik.hack2026.api.exception.WeakPasswordException
 import ru.medovik.hack2026.api.jooq.tables.pojos.UserAccounts
 import ru.medovik.hack2026.api.properties.AuthProperties
 import ru.medovik.hack2026.api.repository.auth.UserAccountRepository
@@ -33,13 +36,13 @@ class AuthenticationService(
     ): AuthenticationResponse {
         provisioning.synchronizeExternalUsers()
 
-        val account = accounts.findByEmail(request.email.trim().lowercase())
-            ?: throw AuthenticationException("Неверный email или пароль")
+        val account = accounts.findByLogin(request.login.trim().lowercase())
+            ?: throw AuthenticationException("Неверный логин или пароль")
         if (account.status != "ACTIVE") {
             throw AuthenticationException("Учётная запись отключена")
         }
         if (!passwordEncoder.matches(request.password, account.passwordHash)) {
-            throw AuthenticationException("Неверный email или пароль")
+            throw AuthenticationException("Неверный логин или пароль")
         }
 
         logger.info("Password login succeeded: userId={}", account.id)
@@ -53,19 +56,20 @@ class AuthenticationService(
         refreshToken: String,
         response: HttpServletResponse,
     ): AuthenticationResponse {
-        val email = try {
+        val login = try {
             jwtService.subject(refreshToken)
         } catch (_: Exception) {
             throw AuthenticationException("Некорректный refresh-токен")
         }
-        val account = accounts.findByEmail(email)
+        val account = accounts.findByLogin(login)
             ?: throw AuthenticationException("Некорректный refresh-токен")
         if (account.status != "ACTIVE") {
             throw AuthenticationException("Учётная запись отключена")
         }
         if (!jwtService.isValidRefreshToken(
                 token = refreshToken,
-                email = account.email,
+                login = account.login,
+                version = requireNotNull(account.refreshVersion),
             )
         ) {
             throw AuthenticationException("Некорректный refresh-токен")
@@ -77,7 +81,7 @@ class AuthenticationService(
         )
     }
 
-    fun currentUser(email: String): CurrentUserResponse = accounts.findByEmail(email)
+    fun currentUser(login: String): CurrentUserResponse = accounts.findByLogin(login)
         ?.toResponse()
         ?: throw UserNotFoundException("Учётная запись сотрудника не найдена")
 
@@ -90,6 +94,29 @@ class AuthenticationService(
             ).toString(),
         )
         logger.info("Refresh session cookie cleared")
+    }
+
+    @org.springframework.transaction.annotation.Transactional
+    fun changePassword(login: String, request: ChangePasswordRequest, response: HttpServletResponse) {
+        val account = accounts.findByLogin(login) ?: throw UserNotFoundException("Учётная запись сотрудника не найдена")
+        if (!passwordEncoder.matches(request.currentPassword, account.passwordHash)) {
+            throw InvalidCurrentPasswordException()
+        }
+        val password = request.newPassword
+        if (password.length !in 8..255 || !password.any(Char::isLowerCase) ||
+            !password.any(Char::isUpperCase) || !password.any(Char::isDigit)
+        ) {
+            throw WeakPasswordException()
+        }
+        val changed = accounts.changePassword(
+            id = requireNotNull(account.id),
+            passwordHash = requireNotNull(passwordEncoder.encode(password)),
+        )
+        response.addHeader(
+            HttpHeaders.SET_COOKIE,
+            refreshCookie(token = jwtService.createRefreshToken(changed)).toString(),
+        )
+        logger.info("Account password changed: userId={}", account.id)
     }
 
     private fun createSession(
@@ -120,7 +147,7 @@ class AuthenticationService(
 
     private fun UserAccounts.toResponse() = CurrentUserResponse(
         id = id,
-        email = email,
+        login = login,
         role = requireNotNull(role),
         createdAt = requireNotNull(createdAt),
     )

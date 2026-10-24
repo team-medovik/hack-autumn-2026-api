@@ -39,6 +39,7 @@ import ru.medovik.hack2026.api.repository.dashboard.BillingSnapshotRepository
 import ru.medovik.hack2026.api.repository.dashboard.StoredBillingSnapshot
 import ru.medovik.hack2026.api.service.risk.RiskEngine
 import ru.medovik.hack2026.api.service.settings.ModelSettingsService
+import ru.medovik.hack2026.api.service.settings.CalculationDateService
 import tools.jackson.databind.json.JsonMapper
 import java.math.BigDecimal
 import java.math.RoundingMode
@@ -54,6 +55,7 @@ class DashboardService(
     private val snapshots: BillingSnapshotRepository,
     private val jsonMapper: JsonMapper,
     private val modelSettings: ModelSettingsService,
+    private val calculationDate: CalculationDateService,
 ) {
     private val riskEngine = RiskEngine()
     private val logger = LoggerFactory.getLogger(javaClass)
@@ -393,7 +395,7 @@ class DashboardService(
             val result = riskEngine.calculate(
                 snapshot = payload,
                 settings = modelSettings.riskSettings(),
-                evaluationTime = stored.takenAt.toInstant(),
+                evaluationTime = calculationDate.evaluationTime(),
             )
             return LoadedSnapshot(stored = stored, payload = payload, risk = result)
         } catch (exception: Exception) {
@@ -454,7 +456,7 @@ class DashboardService(
         }
         if (history.size < 2) return ChurnForecast(atRiskServices = atRisk.size, weeks = emptyList())
 
-        val monday = current.stored.takenAt.toInstant().atZone(ZoneOffset.UTC).toLocalDate()
+        val monday = current.risk.evaluationTime.atZone(ZoneOffset.UTC).toLocalDate()
             .with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
         val firstFact = monday.minusWeeks(8)
         val parsedHistory = history.map { stored ->

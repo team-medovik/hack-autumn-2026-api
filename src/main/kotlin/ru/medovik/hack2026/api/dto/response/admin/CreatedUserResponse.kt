@@ -6,11 +6,16 @@ import java.util.UUID
 
 @Schema(description = "Созданный сотрудник и временный пароль. Пароль показывается только в этом ответе.")
 data class CreatedUserResponse(
+    @field:Schema(description = "UUID созданного сотрудника")
     val id: UUID,
-    val email: String,
+    @field:Schema(description = "Логин сотрудника", example = "analyst")
+    val login: String,
+    @field:Schema(description = "Роль сотрудника", example = "EMPLOYEE")
     val role: String,
+    @field:Schema(description = "Статус учётной записи", example = "ACTIVE")
     val status: String,
+    @field:Schema(description = "Время создания с часовым поясом")
     val createdAt: OffsetDateTime,
-    @field:Schema(description = "Временный пароль, выдаётся один раз.")
+    @field:Schema(description = "Временный пароль, выдаётся один раз", accessMode = Schema.AccessMode.READ_ONLY)
     val temporaryPassword: String,
 )

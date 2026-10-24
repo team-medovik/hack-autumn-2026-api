@@ -10,7 +10,7 @@ import io.swagger.v3.oas.annotations.security.SecurityScheme
     info = Info(
         title = "API Hack Autumn 2026",
         version = "v1",
-        description = "API аутентификации сотрудников, сводки рисков и таблицы клиентов.",
+        description = "API сотрудников, снимков биллинга, модели риска, даты расчёта, сводки и карточек клиентов.",
     ),
 )
 @SecurityScheme(

@@ -11,14 +11,14 @@ import java.util.UUID
 class UserAccountRepository(
     private val dsl: DSLContext,
 ) {
-    fun findByEmail(email: String): UserAccounts? = dsl
+    fun findByLogin(login: String): UserAccounts? = dsl
         .selectFrom(USER_ACCOUNTS)
-        .where(USER_ACCOUNTS.EMAIL.eq(email))
+        .where(USER_ACCOUNTS.LOGIN.eq(login))
         .fetchOneInto(UserAccounts::class.java)
 
-    fun findActiveByEmail(email: String): UserAccounts? = dsl
+    fun findActiveByLogin(login: String): UserAccounts? = dsl
         .selectFrom(USER_ACCOUNTS)
-        .where(USER_ACCOUNTS.EMAIL.eq(email))
+        .where(USER_ACCOUNTS.LOGIN.eq(login))
         .and(USER_ACCOUNTS.STATUS.eq("ACTIVE"))
         .fetchOneInto(UserAccounts::class.java)
 
@@ -29,7 +29,7 @@ class UserAccountRepository(
 
     fun findAll(): List<UserAccounts> = dsl
         .selectFrom(USER_ACCOUNTS)
-        .orderBy(USER_ACCOUNTS.CREATED_AT, USER_ACCOUNTS.EMAIL)
+        .orderBy(USER_ACCOUNTS.CREATED_AT, USER_ACCOUNTS.LOGIN)
         .fetchInto(UserAccounts::class.java)
 
     fun lockActiveAdminIds(): List<UUID> = dsl
@@ -56,7 +56,11 @@ class UserAccountRepository(
         status: String,
     ) {
         dsl.update(USER_ACCOUNTS)
-            .set(USER_ACCOUNTS.PASSWORD_HASH, passwordHash)
+            .set(
+                USER_ACCOUNTS.PASSWORD_HASH,
+                org.jooq.impl.DSL.`when`(USER_ACCOUNTS.PASSWORD_SELF_CHANGED.eq(true), USER_ACCOUNTS.PASSWORD_HASH)
+                    .otherwise(passwordHash),
+            )
             .set(USER_ACCOUNTS.ROLE, role)
             .set(USER_ACCOUNTS.STATUS, status)
             .set(USER_ACCOUNTS.UPDATED_AT, org.jooq.impl.DSL.currentOffsetDateTime())
@@ -64,12 +68,12 @@ class UserAccountRepository(
             .execute()
     }
 
-    fun deleteExternalUsersExcept(emails: Collection<String>): Int {
-        val condition = if (emails.isEmpty()) {
+    fun deleteExternalUsersExcept(logins: Collection<String>): Int {
+        val condition = if (logins.isEmpty()) {
             USER_ACCOUNTS.PROVISIONING_SOURCE.eq(AccountSource.ENV_FILE.name)
         } else {
             USER_ACCOUNTS.PROVISIONING_SOURCE.eq(AccountSource.ENV_FILE.name)
-                .and(USER_ACCOUNTS.EMAIL.notIn(emails))
+                .and(USER_ACCOUNTS.LOGIN.notIn(logins))
         }
         return dsl.deleteFrom(USER_ACCOUNTS)
             .where(condition)
@@ -80,4 +84,15 @@ class UserAccountRepository(
         .deleteFrom(USER_ACCOUNTS)
         .where(USER_ACCOUNTS.ID.eq(id))
         .execute()
+
+    fun changePassword(id: UUID, passwordHash: String): UserAccounts = dsl
+        .update(USER_ACCOUNTS)
+        .set(USER_ACCOUNTS.PASSWORD_HASH, passwordHash)
+        .set(USER_ACCOUNTS.PASSWORD_SELF_CHANGED, true)
+        .set(USER_ACCOUNTS.REFRESH_VERSION, USER_ACCOUNTS.REFRESH_VERSION.plus(1))
+        .set(USER_ACCOUNTS.UPDATED_AT, org.jooq.impl.DSL.currentOffsetDateTime())
+        .where(USER_ACCOUNTS.ID.eq(id))
+        .returning()
+        .fetchOneInto(UserAccounts::class.java)
+        ?: error("Не удалось изменить пароль")
 }

@@ -28,15 +28,18 @@ import ru.medovik.hack2026.api.service.auth.AuthenticationService
 @RequestMapping("/api/v1/auth")
 @Tag(
     name = "Аутентификация",
-    description = "Вход сотрудников и жизненный цикл JWT-сессии. Учётные записи заводит оператор; публичной регистрации и подтверждения email нет."
+    description = "Вход сотрудников и жизненный цикл JWT-сессии. " +
+        "Учётные записи заводит оператор; публичной регистрации и подтверждения email нет."
 )
 class AuthenticationController(
     private val authenticationService: AuthenticationService,
 ) {
     @PostMapping("/login")
     @Operation(
+        operationId = "login",
         summary = "Войти в учётную запись сотрудника",
-        description = "Проверяет учётные данные заранее заведённого сотрудника. Возвращает access-токен и устанавливает HttpOnly cookie refresh_token."
+        description = "Проверяет учётные данные заранее заведённого сотрудника. " +
+            "Возвращает access-токен и устанавливает HttpOnly cookie refresh_token."
     )
     @ApiResponses(
         ApiResponse(
@@ -46,8 +49,13 @@ class AuthenticationController(
         ),
         ApiResponse(
             responseCode = "400",
-            description = "Некорректные учётные данные или запрос",
+            description = "Некорректное тело запроса",
             content = [Content(schema = Schema(implementation = ApiErrorResponse::class))]
+        ),
+        ApiResponse(
+            responseCode = "401",
+            description = "Неверный логин или пароль либо учётная запись отключена",
+            content = [Content(schema = Schema(implementation = ApiErrorResponse::class))],
         ),
     )
     fun login(
@@ -60,8 +68,10 @@ class AuthenticationController(
 
     @PostMapping("/refresh")
     @Operation(
+        operationId = "refreshSession",
         summary = "Обновить сессию",
-        description = "Ротирует cookie refresh-токена и возвращает новый access-токен. Refresh-токен не принимается в заголовке Authorization."
+        description = "Ротирует cookie refresh-токена и возвращает новый access-токен. " +
+            "Refresh-токен не принимается в заголовке Authorization."
     )
     @ApiResponses(
         ApiResponse(
@@ -70,7 +80,7 @@ class AuthenticationController(
             content = [Content(schema = Schema(implementation = AuthenticationResponse::class))]
         ),
         ApiResponse(
-            responseCode = "400",
+            responseCode = "401",
             description = "Refresh-токен отсутствует или некорректен",
             content = [Content(schema = Schema(implementation = ApiErrorResponse::class))]
         ),
@@ -89,8 +99,10 @@ class AuthenticationController(
 
     @PostMapping("/logout")
     @Operation(
+        operationId = "logout",
         summary = "Выйти из учётной записи",
-        description = "Удаляет cookie refresh_token в браузере. Текущий access-токен остаётся действительным до окончания своего короткого срока жизни."
+        description = "Удаляет cookie refresh_token в браузере. Текущий access-токен " +
+            "остаётся действительным до окончания своего короткого срока жизни."
     )
     @ApiResponse(responseCode = "204", description = "Cookie refresh-токена удалена")
     fun logout(response: HttpServletResponse): ResponseEntity<Void> {
@@ -100,6 +112,7 @@ class AuthenticationController(
 
     @GetMapping("/me")
     @Operation(
+        operationId = "getCurrentUser",
         summary = "Получить текущего сотрудника",
         description = "Возвращает учётную запись, представленную корректным JWT access-токеном.",
         security = [SecurityRequirement(name = "bearerAuth")]
@@ -117,5 +130,6 @@ class AuthenticationController(
         ),
     )
 
-    fun me(authentication: Authentication): CurrentUserResponse = authenticationService.currentUser(authentication.name)
+    fun me(authentication: Authentication): CurrentUserResponse =
+        authenticationService.currentUser(authentication.name)
 }

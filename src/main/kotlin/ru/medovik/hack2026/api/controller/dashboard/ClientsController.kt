@@ -103,26 +103,83 @@ class ClientsController(
     )
 
     @GetMapping("/{id}")
-    @Operation(operationId = "getClientCard", summary = "Карточка клиента")
-    @ApiResponses(
-        ApiResponse(responseCode = "200", description = "Карточка получена"),
-        ApiResponse(responseCode = "401", description = "Требуется авторизация"),
-        ApiResponse(responseCode = "404", description = "Клиент не найден"),
+    @Operation(
+        operationId = "getClientCard",
+        summary = "Карточка клиента",
+        description = "Показывает score, причины риска, баланс, услуги и расчёт ежемесячных " +
+            "потерь по активному снимку. Клиент без оценки возвращается с null в score.",
     )
-    fun getClientCard(@PathVariable id: String): ClientCard = dashboardService.getClientCard(id = id)
+    @ApiResponses(
+        ApiResponse(
+            responseCode = "200",
+            description = "Карточка получена",
+            content = [Content(schema = Schema(implementation = ClientCard::class))],
+        ),
+        ApiResponse(
+            responseCode = "401",
+            description = "Требуется авторизация",
+            content = [Content(schema = Schema(implementation = ApiErrorResponse::class))],
+        ),
+        ApiResponse(
+            responseCode = "404",
+            description = "Клиент не найден",
+            content = [Content(schema = Schema(implementation = ApiErrorResponse::class))],
+        ),
+    )
+    fun getClientCard(
+        @Parameter(description = "ID клиента из списка", example = "1") @PathVariable id: String,
+    ): ClientCard = dashboardService.getClientCard(id = id)
 
     @GetMapping("/{id}/position")
-    @Operation(operationId = "getClientPosition", summary = "Место клиента в списке и его соседи")
+    @Operation(
+        operationId = "getClientPosition",
+        summary = "Место клиента в списке и его соседи",
+        description = "Применяет те же поиск, фильтр и сортировку, что список клиентов. " +
+            "Если клиент исключён фильтром, index, prevId и nextId равны null.",
+    )
     @ApiResponses(
-        ApiResponse(responseCode = "200", description = "Позиция получена"),
-        ApiResponse(responseCode = "401", description = "Требуется авторизация"),
-        ApiResponse(responseCode = "404", description = "Клиент не найден"),
+        ApiResponse(
+            responseCode = "200",
+            description = "Позиция получена",
+            content = [Content(schema = Schema(implementation = ClientPosition::class))],
+        ),
+        ApiResponse(
+            responseCode = "400",
+            description = "Некорректные параметры списка",
+            content = [Content(schema = Schema(implementation = ApiErrorResponse::class))],
+        ),
+        ApiResponse(
+            responseCode = "401",
+            description = "Требуется авторизация",
+            content = [Content(schema = Schema(implementation = ApiErrorResponse::class))],
+        ),
+        ApiResponse(
+            responseCode = "404",
+            description = "Клиент не найден",
+            content = [Content(schema = Schema(implementation = ApiErrorResponse::class))],
+        ),
     )
     fun getClientPosition(
-        @PathVariable id: String,
+        @Parameter(description = "ID клиента из списка", example = "1") @PathVariable id: String,
+        @Parameter(
+            description = "Уровень риска. При поиске фильтр не применяется.",
+            schema = Schema(allowableValues = ["high", "medium", "low", "none"]),
+        )
         @RequestParam(required = false) level: String?,
+        @Parameter(description = "Подстрока email или ID без учёта регистра")
         @RequestParam(required = false) search: String?,
+        @Parameter(
+            description = "Поле сортировки",
+            schema = Schema(
+                allowableValues = ["score", "id", "email", "balance", "topUp", "monthlyLoss"],
+                defaultValue = "score",
+            ),
+        )
         @RequestParam(required = false) sort: String?,
+        @Parameter(
+            description = "Направление сортировки",
+            schema = Schema(allowableValues = ["asc", "desc"], defaultValue = "desc"),
+        )
         @RequestParam(required = false) order: String?,
     ): ClientPosition = dashboardService.getClientPosition(
         id = id,

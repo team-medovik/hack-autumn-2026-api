@@ -1,15 +1,18 @@
 CREATE TABLE user_accounts (
     id UUID PRIMARY KEY,
-    email VARCHAR(255) NOT NULL UNIQUE,
+    login VARCHAR(255) NOT NULL UNIQUE,
     password_hash TEXT NOT NULL,
     role VARCHAR(32) NOT NULL DEFAULT 'EMPLOYEE',
     status VARCHAR(32) NOT NULL DEFAULT 'ACTIVE',
     provisioning_source VARCHAR(32) NOT NULL,
+    refresh_version BIGINT NOT NULL DEFAULT 0,
+    password_self_changed BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT user_accounts_login_length CHECK (char_length(login) > 3)
 );
 
-CREATE INDEX idx_user_accounts_email ON user_accounts (email);
+CREATE INDEX idx_user_accounts_login ON user_accounts (login);
 
 CREATE TABLE oidc_identities (
     id UUID PRIMARY KEY,
@@ -26,11 +29,23 @@ CREATE TABLE billing_snapshots (
     id VARCHAR(255) PRIMARY KEY,
     taken_at TIMESTAMP WITH TIME ZONE NOT NULL,
     payload JSONB NOT NULL,
+    file_name VARCHAR(255) NOT NULL DEFAULT 'data.json',
+    uploaded_by VARCHAR(255) NOT NULL DEFAULT 'system',
+    clients_count INTEGER NOT NULL DEFAULT 0,
+    services_count INTEGER NOT NULL DEFAULT 0,
+    raw_file BYTEA,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT billing_snapshots_payload_object CHECK (jsonb_typeof(payload) = 'object')
 );
 
 CREATE INDEX idx_billing_snapshots_taken_at ON billing_snapshots (taken_at DESC, id DESC);
+
+CREATE TABLE calculation_date_settings (
+    id BOOLEAN PRIMARY KEY DEFAULT TRUE CHECK (id),
+    mode VARCHAR(7) NOT NULL DEFAULT 'current' CHECK (mode IN ('current', 'fixed')),
+    fixed_at TIMESTAMP WITH TIME ZONE,
+    CONSTRAINT calculation_date_fixed_at CHECK (mode = 'current' OR fixed_at IS NOT NULL)
+);
 
 CREATE TABLE model_settings (
     version BIGINT PRIMARY KEY,

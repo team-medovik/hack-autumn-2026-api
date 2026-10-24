@@ -21,15 +21,24 @@ import ru.medovik.hack2026.api.service.settings.ModelSettingsService
 
 @RestController
 @RequestMapping("/api/v1/settings/model")
-@Tag(name = "Настройки", description = "Параметры модели риска")
+@Tag(name = "Настройки", description = "Параметры модели риска и дата расчёта")
 @SecurityRequirement(name = "bearerAuth")
 class ModelSettingsController(
     private val service: ModelSettingsService,
 ) {
     @GetMapping
-    @Operation(operationId = "getModelSettings", summary = "Получить параметры модели риска")
+    @Operation(
+        operationId = "getModelSettings",
+        summary = "Получить параметры модели риска",
+        description = "Возвращает текущую версию, значения, заводские настройки " +
+            "и распределение score по активному снимку.",
+    )
     @ApiResponses(
-        ApiResponse(responseCode = "200", description = "Параметры получены"),
+        ApiResponse(
+            responseCode = "200",
+            description = "Параметры получены",
+            content = [Content(schema = Schema(implementation = ModelSettings::class))],
+        ),
         ApiResponse(
             responseCode = "401",
             description = "Требуется авторизация",
@@ -39,9 +48,18 @@ class ModelSettingsController(
     fun getModelSettings(): ModelSettings = service.get()
 
     @PutMapping
-    @Operation(operationId = "saveModelSettings", summary = "Сохранить параметры модели риска")
+    @Operation(
+        operationId = "saveModelSettings",
+        summary = "Сохранить параметры модели риска",
+        description = "Сравнивает version с текущей версией, проверяет диапазоны " +
+            "и возвращает новую версию после пересчёта распределения score.",
+    )
     @ApiResponses(
-        ApiResponse(responseCode = "200", description = "Сохранено и пересчитано"),
+        ApiResponse(
+            responseCode = "200",
+            description = "Сохранено и пересчитано",
+            content = [Content(schema = Schema(implementation = ModelSettings::class))],
+        ),
         ApiResponse(
             responseCode = "401",
             description = "Требуется авторизация",
