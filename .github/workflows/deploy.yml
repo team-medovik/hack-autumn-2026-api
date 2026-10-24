@@ -283,6 +283,7 @@ jobs:
 
           docker run --rm \
             --network host \
+            --user "$(id -u):$(id -g)" \
             -v "$JAR_DIR:/download" \
             -e MINIO_ENDPOINT="$MINIO_ENDPOINT" \
             -e MINIO_ACCESS_KEY="$MINIO_ACCESS_KEY" \
