@@ -7,6 +7,18 @@ spring:
   profiles:
     default: dev
 
+app:
+  auth:
+    # 256-битный ключ в Base64. В каждом окружении переопределяйте через APP_AUTH_JWT_SECRET.
+    jwt-secret: ${APP_AUTH_JWT_SECRET:ZGV2ZWxvcG1lbnQtb25seS1qd3Qtc2VjcmV0LW11c3QtYmUtYXQtbGVhc3QtMzItYnl0ZXM=}
+    access-token-ttl: ${APP_AUTH_ACCESS_TOKEN_TTL:15m}
+    refresh-token-ttl: ${APP_AUTH_REFRESH_TOKEN_TTL:30d}
+    secure-cookie: ${APP_AUTH_SECURE_COOKIE:false}
+    oidc:
+      enabled: ${APP_AUTH_OIDC_ENABLED:false}
+      success-redirect-uri: ${APP_AUTH_OIDC_SUCCESS_REDIRECT_URI:/}
+#      registrations: {}
+
 springdoc:
   api-docs:
     enabled: true

@@ -10,6 +10,7 @@ services:
       - ./.env
     volumes:
       - /home/kinoko/logs/teamup/hack-autumn-2026-api:/logs
+      - ./runtime:/config:ro
     networks:
       - backend
     ports:

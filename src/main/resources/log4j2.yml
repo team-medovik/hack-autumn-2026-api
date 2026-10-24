@@ -10,9 +10,9 @@ Configuration:
       - name: log-archive-path
         value: ${log-path}/archive
       - name: log-file-pattern
-        value: "[%date{ISO8601}][%-5level][%thread][%class.%method] %message%n"
+        value: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} [%-5level] [%X{requestId}] [%t] %c{1} - %msg%n%throwable"
       - name: log-console-pattern
-        value: "%d{yyyy-MM-dd HH:mm:ss.SSS} %highlight{[%-5level][%t][%class.%method]}{FATAL=magenta, ERROR=red, WARN=yellow, INFO=green, DEBUG=cyan, TRACE=blue}: %msg%n%throwable"
+        value: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %highlight{[%-5level]}{FATAL=magenta, ERROR=red, WARN=yellow, INFO=green, DEBUG=cyan, TRACE=blue} [%X{requestId}] [%t] %c{1} - %msg%n%throwable"
       - name: log-file-extension-pattern
         value: "%d{yyyy-MM-dd}-%i"
 
@@ -43,6 +43,13 @@ Configuration:
         disableAnsi: false
 
   Loggers:
+    Logger:
+      - name: org.springframework.security
+        level: warn
+      - name: org.jooq
+        level: warn
+      - name: ru.medovik.hack2026.api
+        level: info
     Root:
       level: info
       AppenderRef:
