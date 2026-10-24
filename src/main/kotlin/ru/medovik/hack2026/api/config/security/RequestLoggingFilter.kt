@@ -16,6 +16,9 @@ class RequestLoggingFilter : OncePerRequestFilter() {
     @Suppress("PROPERTY_HIDES_JAVA_FIELD")
     private val logger = LoggerFactory.getLogger(javaClass)
 
+    override fun shouldNotFilter(request: HttpServletRequest): Boolean =
+        request.requestURI == "/actuator/prometheus"
+
     override fun doFilterInternal(
         request: HttpServletRequest,
         response: HttpServletResponse,
