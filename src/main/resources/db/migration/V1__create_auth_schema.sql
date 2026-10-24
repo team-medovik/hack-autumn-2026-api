@@ -1,7 +1,7 @@
 CREATE TABLE user_accounts (
     id UUID PRIMARY KEY,
-    email VARCHAR(320) NOT NULL UNIQUE,
-    password_hash VARCHAR(255) NOT NULL,
+    email VARCHAR(255) NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
     role VARCHAR(32) NOT NULL DEFAULT 'EMPLOYEE',
     status VARCHAR(32) NOT NULL DEFAULT 'ACTIVE',
     provisioning_source VARCHAR(32) NOT NULL,
