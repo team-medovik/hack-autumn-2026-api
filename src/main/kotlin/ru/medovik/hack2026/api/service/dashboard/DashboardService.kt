@@ -5,6 +5,7 @@ import org.springframework.transaction.annotation.Isolation
 import org.springframework.transaction.annotation.Transactional
 import org.slf4j.LoggerFactory
 import ru.medovik.hack2026.api.dto.request.risk.Account
+import ru.medovik.hack2026.api.dto.request.risk.RiskSettings
 import ru.medovik.hack2026.api.dto.request.risk.PaymentTerm
 import ru.medovik.hack2026.api.dto.request.risk.RiskSnapshot
 import ru.medovik.hack2026.api.dto.request.risk.ServiceStatus
@@ -22,6 +23,14 @@ import ru.medovik.hack2026.api.dto.response.dashboard.RiskQueue
 import ru.medovik.hack2026.api.dto.response.dashboard.ScoreFactor
 import ru.medovik.hack2026.api.dto.response.dashboard.SnapshotInfo
 import ru.medovik.hack2026.api.dto.response.dashboard.TopRiskClient
+import ru.medovik.hack2026.api.dto.response.client.ClientCard
+import ru.medovik.hack2026.api.dto.response.client.ClientCardBalance
+import ru.medovik.hack2026.api.dto.response.client.ClientFactor
+import ru.medovik.hack2026.api.dto.response.client.ClientPosition
+import ru.medovik.hack2026.api.dto.response.client.ClientService
+import ru.medovik.hack2026.api.dto.response.client.ClientServiceEvent
+import ru.medovik.hack2026.api.dto.response.client.LossBreakdown
+import ru.medovik.hack2026.api.dto.response.client.LossBreakdownItem
 import ru.medovik.hack2026.api.dto.response.risk.CustomerRiskResult
 import ru.medovik.hack2026.api.dto.response.risk.FeatureContribution
 import ru.medovik.hack2026.api.dto.response.risk.RiskResult
@@ -29,20 +38,22 @@ import ru.medovik.hack2026.api.dto.response.risk.ServiceRiskResult
 import ru.medovik.hack2026.api.repository.dashboard.BillingSnapshotRepository
 import ru.medovik.hack2026.api.repository.dashboard.StoredBillingSnapshot
 import ru.medovik.hack2026.api.service.risk.RiskEngine
+import ru.medovik.hack2026.api.service.settings.ModelSettingsService
 import tools.jackson.databind.json.JsonMapper
 import java.math.BigDecimal
 import java.math.RoundingMode
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.ZoneOffset
+import java.time.Duration
 import java.time.temporal.TemporalAdjusters
-import kotlin.math.roundToInt
 
 @Service
 @Transactional(readOnly = true)
 class DashboardService(
     private val snapshots: BillingSnapshotRepository,
     private val jsonMapper: JsonMapper,
+    private val modelSettings: ModelSettingsService,
 ) {
     private val riskEngine = RiskEngine()
     private val logger = LoggerFactory.getLogger(javaClass)
@@ -176,15 +187,13 @@ class DashboardService(
         }
         val clients = project(load(stored))
         val query = search?.trim()?.takeIf { it.isNotEmpty() }
-        val filtered = clients.filter { client ->
-            if (query != null) {
-                client.account.email.contains(query, ignoreCase = true) ||
-                    client.account.id.toString().contains(query, ignoreCase = true)
-            } else {
-                normalizedLevel == null || client.level == normalizedLevel
-            }
-        }
-        val sorted = filtered.sortedWith(comparator(field = sortField, order = direction))
+        val sorted = filterAndSort(
+            clients = clients,
+            level = level,
+            search = search,
+            sort = sort,
+            order = order,
+        )
         val lastPage = if (sorted.isEmpty()) 1 else (sorted.size - 1) / size + 1
         val actualPage = requestedPage.coerceAtMost(lastPage)
         val first = (actualPage - 1) * size
@@ -221,11 +230,169 @@ class DashboardService(
         return response
     }
 
+    fun getClientCard(id: String): ClientCard {
+        val stored = snapshots.findLatest() ?: throw NoSuchElementException("Клиент не найден")
+        val snapshot = load(stored)
+        val client = project(snapshot).firstOrNull { it.account.id.toString() == id }
+            ?: throw NoSuchElementException("Клиент не найден")
+        val sourceServices = snapshot.payload.services.filter { it.ownerId == client.account.id }
+        val scored = snapshot.risk.services.associateBy { it.serviceId }
+        val breakdown = lossItems(
+            services = sourceServices,
+            scored = scored,
+            settings = snapshot.risk.settings,
+            funding = client.risk.funding,
+        )
+        val leading = snapshot.risk.services.filter { it.ownerId == client.account.id && it.score != null }
+            .maxWithOrNull(compareBy<ServiceRiskResult> { it.score }.thenBy { -it.serviceId })
+        val positive = leading?.features.orEmpty().filter { it.contribution > 0 }
+            .sortedWith(compareByDescending<FeatureContribution> { it.contribution }.thenBy { it.code })
+        val rawScore = leading?.rawScore ?: 0.0
+        val factorScale = if (rawScore > 100.0) 100.0 / rawScore else 1.0
+        val factors = positive.map { feature ->
+            ClientFactor(
+                id = reasonId(feature.code),
+                label = feature.explanation,
+                points = feature.contribution * factorScale,
+            )
+        }
+        val services = sourceServices.map { service ->
+            val risk = scored.getValue(service.id)
+            val status = when (service.status) {
+                ServiceStatus.PROLONG_WAIT -> "awaiting_payment"
+                ServiceStatus.ACTIVE -> "active"
+                ServiceStatus.SUSPENDED -> "disabled_by_client"
+                ServiceStatus.DELETED -> "deleted"
+                ServiceStatus.BLOCKED -> "blocked"
+            }
+            val event = when (service.status) {
+                ServiceStatus.PROLONG_WAIT -> ClientServiceEvent(
+                    type = "delete",
+                    date = service.expiresAt.plus(Duration.ofDays(5)).atZone(ZoneOffset.UTC).toLocalDate(),
+                )
+                ServiceStatus.ACTIVE, ServiceStatus.SUSPENDED -> ClientServiceEvent(
+                    type = if (service.autoProlong) "renew" else "expire",
+                    date = service.expiresAt.atZone(ZoneOffset.UTC).toLocalDate(),
+                )
+                ServiceStatus.DELETED, ServiceStatus.BLOCKED -> null
+            }
+            ClientService(
+                id = service.id.toString(),
+                name = service.name,
+                score = risk.score,
+                level = risk.level.name.lowercase(),
+                status = status,
+                monthlyPrice = if (service.status.isLive) {
+                    monthlyPrice(cents = service.price, term = service.paymentTerm)
+                } else null,
+                event = event,
+                autoRenew = if (service.status.isLive) service.autoProlong else null,
+            )
+        }
+        val funding = client.risk.funding
+        val card = ClientCard(
+            id = id,
+            email = client.account.email,
+            score = client.score,
+            level = client.level,
+            factors = factors,
+            balance = ClientCardBalance(
+                available = euros(funding.availableFunds),
+                required = if (client.score == null || funding.requiredFunds == 0L) null else euros(funding.requiredFunds),
+                monthlyLoss = breakdown.fold(ZERO) { sum, item -> sum + item.loss },
+            ),
+            services = services,
+            lossBreakdown = LossBreakdown(
+                k = snapshot.risk.settings.balanceLossFactor,
+                uncoveredShare = funding.shortageStrength,
+                items = breakdown,
+            ),
+        )
+        logger.debug(
+            "Client card built: snapshotId={}, clientId={}, services={}, lossItems={}",
+            stored.id,
+            id,
+            card.services.size,
+            card.lossBreakdown.items.size,
+        )
+        return card
+    }
+
+    fun getClientPosition(
+        id: String,
+        level: String?,
+        search: String?,
+        sort: String?,
+        order: String?,
+    ): ClientPosition {
+        val stored = snapshots.findLatest() ?: throw NoSuchElementException("Клиент не найден")
+        val clients = project(load(stored))
+        if (clients.none { it.account.id.toString() == id }) throw NoSuchElementException("Клиент не найден")
+        val sorted = filterAndSort(clients = clients, level = level, search = search, sort = sort, order = order)
+        val zeroIndex = sorted.indexOfFirst { it.account.id.toString() == id }
+        val position = ClientPosition(
+            index = if (zeroIndex < 0) null else zeroIndex + 1,
+            total = sorted.size,
+            prevId = sorted.getOrNull(zeroIndex - 1)?.account?.id?.toString(),
+            nextId = if (zeroIndex < 0) null else sorted.getOrNull(zeroIndex + 1)?.account?.id?.toString(),
+        )
+        logger.debug(
+            "Client position built: snapshotId={}, clientId={}, index={}, total={}",
+            stored.id,
+            id,
+            position.index,
+            position.total,
+        )
+        return position
+    }
+
+    private fun filterAndSort(
+        clients: List<ClientProjection>,
+        level: String?,
+        search: String?,
+        sort: String?,
+        order: String?,
+    ): List<ClientProjection> {
+        val normalizedLevel = level?.lowercase()
+        require(normalizedLevel == null || normalizedLevel in LEVELS) { "Неизвестный уровень риска" }
+        val sortField = sort ?: "score"
+        require(sortField in SORT_FIELDS) { "Неизвестное поле сортировки" }
+        val direction = order ?: "desc"
+        require(direction == "asc" || direction == "desc") { "Порядок должен быть asc или desc" }
+        val query = search?.trim()?.takeIf { it.isNotEmpty() }
+        return clients.filter { client ->
+            if (query != null) {
+                client.account.email.contains(query, ignoreCase = true) ||
+                    client.account.id.toString().contains(query, ignoreCase = true)
+            } else normalizedLevel == null || client.level == normalizedLevel
+        }.sortedWith(comparator(field = sortField, order = direction))
+    }
+
+    private fun lossItems(
+        services: List<ru.medovik.hack2026.api.dto.request.risk.Service>,
+        scored: Map<Long, ServiceRiskResult>,
+        settings: RiskSettings,
+        funding: ru.medovik.hack2026.api.dto.response.risk.FundingSummary,
+    ): List<LossBreakdownItem> = services.filter { it.status.isLive }.mapNotNull { service ->
+        val score = scored.getValue(service.id).score?.takeIf { it > 0.0 } ?: return@mapNotNull null
+        val price = monthlyPrice(cents = service.price, term = service.paymentTerm)
+        val risk = score / 100.0
+        val share = settings.balanceLossFactor + (1.0 - settings.balanceLossFactor) * funding.shortageStrength
+        LossBreakdownItem(
+            serviceId = service.id.toString(),
+            serviceName = service.name,
+            monthlyPrice = price,
+            risk = risk,
+            loss = price.multiply(BigDecimal.valueOf(risk * share)).setScale(2, RoundingMode.HALF_UP),
+        )
+    }
+
     private fun load(stored: StoredBillingSnapshot): LoadedSnapshot {
         try {
             val payload = jsonMapper.readValue(stored.payload, RiskSnapshot::class.java)
             val result = riskEngine.calculate(
                 snapshot = payload,
+                settings = modelSettings.riskSettings(),
                 evaluationTime = stored.takenAt.toInstant(),
             )
             return LoadedSnapshot(stored = stored, payload = payload, risk = result)
@@ -258,14 +425,12 @@ class DashboardService(
                     it.contribution
                 }.thenBy { it.code })
             val reasonId = leadingFactors.firstOrNull()?.code?.let { reasonId(it) }
-            // If a client churns, their whole live portfolio is lost, not just the leading service.
-            val loss = if ((risk.attentionScore ?: 0.0) > 0.0) {
-                services[account.id].orEmpty()
-                    .filter { it.status.isLive }
-                    .fold(ZERO) { sum, service ->
-                        sum + monthlyPrice(cents = service.price, term = service.paymentTerm)
-                    }
-            } else ZERO
+            val loss = lossItems(
+                services = services[account.id].orEmpty(),
+                scored = scoredServices[account.id].orEmpty().associateBy { it.serviceId },
+                settings = snapshot.risk.settings,
+                funding = risk.funding,
+            ).fold(ZERO) { sum, item -> sum + item.loss }
             ClientProjection(
                 account = account,
                 risk = risk,
@@ -276,7 +441,7 @@ class DashboardService(
                     ScoreFactor(
                         id = reasonId(feature.code),
                         label = factorLabel(code = feature.code, risk = risk),
-                        points = feature.contribution.roundToInt().coerceIn(0, 100),
+                        points = feature.contribution.coerceIn(0.0, 100.0),
                     )
                 },
             )

@@ -10,9 +10,13 @@ data class RiskSettings(
         "F3" to 70.0,
         "F4" to 30.0,
         "F5" to 15.0,
+        "F6" to 10.0,
     ),
     val mediumThreshold: Double = 40.0,
     val highThreshold: Double = 70.0,
+    val bonusesAsMoney: Boolean = true,
+    val referralBalanceAsMoney: Boolean = false,
+    val balanceLossFactor: Double = 0.5,
 ) {
     init {
         require(horizonDays > 0) { "horizonDays must be positive" }
@@ -23,6 +27,9 @@ data class RiskSettings(
         require(mediumThreshold.isFinite() && highThreshold.isFinite() &&
             mediumThreshold > 0 && mediumThreshold < highThreshold && highThreshold <= 100
         ) { "Thresholds must satisfy 0 < medium < high <= 100" }
+        require(balanceLossFactor.isFinite() && balanceLossFactor in 0.0..1.0) {
+            "balanceLossFactor must be in 0..1"
+        }
     }
 
     fun level(score: Double?): RiskLevel = when {
