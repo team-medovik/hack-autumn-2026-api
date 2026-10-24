@@ -54,6 +54,7 @@ class SecurityConfig {
                     "/oauth2/**",
                     "/login/oauth2/**",
                     "/api/v1/docs/**",
+                    "/api/v1/openapi/**",
                     "/api/v1/swagger/**",
                     "/api/v1/swagger-ui/**",
                     "/swagger-ui/**",
