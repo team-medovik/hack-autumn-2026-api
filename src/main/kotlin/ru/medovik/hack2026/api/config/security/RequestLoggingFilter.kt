@@ -17,7 +17,9 @@ class RequestLoggingFilter : OncePerRequestFilter() {
     private val logger = LoggerFactory.getLogger(javaClass)
 
     override fun shouldNotFilter(request: HttpServletRequest): Boolean =
-        request.requestURI == "/actuator/prometheus"
+        request.requestURI.contains("/api/v1/docs") ||
+        request.requestURI.contains("/swagger") ||
+        request.requestURI.contains("/actuator")
 
     override fun doFilterInternal(
         request: HttpServletRequest,
