@@ -9,6 +9,8 @@ build/
 .env.*
 !.env.example
 !**/.env.example
+/runtime/users.env
+/src/main/resources/users.env
 
 ### IntelliJ IDEA ###
 .idea/modules.xml
@@ -54,3 +56,5 @@ bin/
 ### Mac OS ###
 .DS_Store
 /.idea/
+/docs/
+/logs/

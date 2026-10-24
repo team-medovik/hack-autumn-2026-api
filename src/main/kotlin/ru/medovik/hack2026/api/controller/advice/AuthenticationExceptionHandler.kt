@@ -1,0 +1,100 @@
+package ru.medovik.hack2026.api.controller.advice
+
+import jakarta.servlet.http.HttpServletRequest
+import org.slf4j.LoggerFactory
+import org.springframework.http.HttpStatus
+import org.springframework.http.ResponseEntity
+import org.springframework.http.converter.HttpMessageNotReadableException
+import org.springframework.web.bind.MissingRequestCookieException
+import org.springframework.web.bind.annotation.ExceptionHandler
+import org.springframework.web.bind.annotation.RestControllerAdvice
+import ru.medovik.hack2026.api.dto.response.common.ApiErrorResponse
+import ru.medovik.hack2026.api.exception.AuthenticationException
+import ru.medovik.hack2026.api.exception.UserNotFoundException
+
+@RestControllerAdvice
+class AuthenticationExceptionHandler {
+    private val logger = LoggerFactory.getLogger(AuthenticationExceptionHandler::class.java)
+
+    @ExceptionHandler(
+        AuthenticationException::class,
+        MissingRequestCookieException::class,
+        HttpMessageNotReadableException::class,
+    )
+    fun authenticationFailed(
+        exception: Exception,
+        request: HttpServletRequest,
+    ) = error(
+        status = HttpStatus.UNAUTHORIZED,
+        code = "AUTHENTICATION_ERROR",
+        message = exception.message ?: "Некорректный запрос аутентификации",
+        request = request,
+    )
+
+    @ExceptionHandler(UserNotFoundException::class)
+    fun userNotFound(
+        exception: UserNotFoundException,
+        request: HttpServletRequest,
+    ) = error(
+        status = HttpStatus.NOT_FOUND,
+        code = "USER_NOT_FOUND",
+        message = exception.message ?: "Учётная запись сотрудника не найдена",
+        request = request,
+    )
+
+    @ExceptionHandler(IllegalArgumentException::class)
+    fun invalidRequest(
+        exception: IllegalArgumentException,
+        request: HttpServletRequest,
+    ) = error(
+        status = HttpStatus.BAD_REQUEST,
+        code = "INVALID_REQUEST",
+        message = exception.message ?: "Некорректный запрос",
+        request = request,
+    )
+
+    @ExceptionHandler(NoSuchElementException::class)
+    fun resourceNotFound(
+        exception: NoSuchElementException,
+        request: HttpServletRequest,
+    ) = error(
+        status = HttpStatus.NOT_FOUND,
+        code = "NOT_FOUND",
+        message = exception.message ?: "Ресурс не найден",
+        request = request,
+    )
+
+    @ExceptionHandler(Exception::class)
+    fun unexpected(
+        exception: Exception,
+        request: HttpServletRequest,
+    ): ResponseEntity<ApiErrorResponse> {
+        logger.error(
+            "Unhandled API error: method={}, path={}",
+            request.method,
+            request.requestURI,
+            exception,
+        )
+        return error(
+            status = HttpStatus.INTERNAL_SERVER_ERROR,
+            code = "INTERNAL_ERROR",
+            message = "Внутренняя ошибка сервера",
+            request = request,
+        )
+    }
+
+    private fun error(
+        status: HttpStatus,
+        code: String,
+        message: String,
+        request: HttpServletRequest,
+    ): ResponseEntity<ApiErrorResponse> =
+        ResponseEntity.status(status).body(
+            ApiErrorResponse(
+                status = status.value(),
+                error = code,
+                message = message,
+                path = request.requestURI,
+            )
+        )
+}

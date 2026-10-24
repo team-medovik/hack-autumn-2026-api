@@ -1,4 +1,3 @@
-import nu.studer.gradle.jooq.JooqGenerate
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 import org.jooq.meta.jaxb.Database
 import org.jooq.meta.jaxb.Generate
@@ -18,6 +17,7 @@ group = "ru.medovik.hack2026"
 version = "1.0.0"
 
 val jooqVersion = "3.21.5"
+val jwtVersion = "0.12.6"
 
 val jooqSchemaScript = "src/main/resources/sql/init-tables.sql"
 
@@ -45,8 +45,15 @@ dependencies {
     // Web
     implementation("org.springframework.boot:spring-boot-starter-webmvc")
 
+    // Security and JWT
+    implementation("org.springframework.boot:spring-boot-starter-security")
+    implementation("org.springframework.boot:spring-boot-starter-oauth2-client")
+    implementation("io.jsonwebtoken:jjwt-api:$jwtVersion")
+    runtimeOnly("io.jsonwebtoken:jjwt-impl:$jwtVersion")
+    runtimeOnly("io.jsonwebtoken:jjwt-jackson:$jwtVersion")
+
     // Flyway
-    implementation("org.flywaydb:flyway-core")
+    implementation("org.springframework.boot:spring-boot-starter-flyway")
     implementation("org.flywaydb:flyway-database-postgresql")
 
     // JOOQ
@@ -161,10 +168,6 @@ jooq {
     }
 }
 
-tasks.named<JooqGenerate>("generateJooq") {
-    allInputsDeclared.set(true)
-}
-
 tasks.withType<KotlinCompile>().configureEach {
     dependsOn(tasks.named("generateJooq"))
 }
@@ -187,7 +190,7 @@ tasks.register<JavaExec>("riskReport") {
     description = "Расчёт риска: -PriskInput=JSON -PriskAt=ISO8601 -PriskOutput=JSON -PriskSettings=JSON"
     dependsOn(tasks.named("testClasses"))
     classpath = sourceSets["test"].runtimeClasspath
-    mainClass.set("ru.medovik.hack2026.api.risk.FixtureRiskReportKt")
+    mainClass.set("ru.medovik.hack2026.api.service.risk.FixtureRiskReportKt")
     systemProperty("stdout.encoding", "UTF-8")
     systemProperty("stderr.encoding", "UTF-8")
     val inputPath = providers.gradleProperty("riskInput")
