@@ -18,6 +18,7 @@ import ru.medovik.hack2026.api.exception.InvalidModelSettingsException
 import ru.medovik.hack2026.api.exception.ModelSettingsConflictException
 import ru.medovik.hack2026.api.repository.dashboard.BillingSnapshotRepository
 import ru.medovik.hack2026.api.repository.settings.ModelSettingsRepository
+import ru.medovik.hack2026.api.repository.settings.CalculationDateRepository
 import ru.medovik.hack2026.api.service.risk.RiskEngine
 import tools.jackson.databind.json.JsonMapper
 import java.time.OffsetDateTime
@@ -29,6 +30,7 @@ class ModelSettingsService(
     private val repository: ModelSettingsRepository,
     private val snapshots: BillingSnapshotRepository,
     private val jsonMapper: JsonMapper,
+    private val calculationDate: CalculationDateRepository,
 ) {
     private val riskEngine = RiskEngine()
     private val logger = LoggerFactory.getLogger(javaClass)
@@ -103,7 +105,9 @@ class ModelSettingsService(
             val result = riskEngine.calculate(
                 snapshot = snapshot,
                 settings = toRiskSettings(values),
-                evaluationTime = stored.takenAt.toInstant(),
+                evaluationTime = calculationDate.get().let { date ->
+                    if (date.mode == "fixed") requireNotNull(date.fixedAt).toInstant() else java.time.Instant.now()
+                },
             )
             result.customers.mapNotNull { it.attentionScore }.forEach { score ->
                 histogram[floor(score).toInt().coerceIn(0, 100)]++

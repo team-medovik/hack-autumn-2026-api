@@ -40,7 +40,7 @@ class AccountProvisioningService(
         }
     }
 
-    fun createByAdmin(request: CreateUserRequest): CreatedUser {
+    fun createByAdmin(request: CreateUserRequest, actorLogin: String): CreatedUser {
         val login = AccountLogin.normalize(request.login)
         if (repository.findByLogin(login) != null) {
             throw UserAlreadyExistsException("Пользователь с логином $login уже существует")
@@ -56,6 +56,8 @@ class AccountProvisioningService(
                     role = request.role.name,
                     status = request.status.name,
                     provisioningSource = AccountSource.ADMIN_PANEL.name,
+                    refreshVersion = 0L,
+                    passwordSelfChanged = false,
                     createdAt = OffsetDateTime.now(),
                     updatedAt = OffsetDateTime.now(),
                 )
@@ -68,7 +70,13 @@ class AccountProvisioningService(
             }
             throw exception
         }
-        logger.info("User account created from admin panel: login={}, role={}", account.login, account.role)
+        logger.info(
+            "User account created from admin panel: userId={}, login={}, role={}, actor={}",
+            account.id,
+            account.login,
+            account.role,
+            actorLogin,
+        )
         return CreatedUser(account, temporaryPassword)
     }
 
@@ -92,7 +100,7 @@ class AccountProvisioningService(
             )
         }
         check(repository.deleteById(id) == 1) { "Не удалось удалить учётную запись пользователя" }
-        logger.info("User account deleted from admin panel: id={}, login={}", id, account.login)
+        logger.info("User account deleted from admin panel: id={}, login={}, actor={}", id, account.login, actorLogin)
     }
 
     private fun upsertExternalUser(definition: ExternalUserDefinition) {
@@ -123,6 +131,8 @@ class AccountProvisioningService(
         role = role.name,
         status = status.name,
         provisioningSource = AccountSource.ENV_FILE.name,
+        refreshVersion = 0L,
+        passwordSelfChanged = false,
         createdAt = OffsetDateTime.now(),
         updatedAt = OffsetDateTime.now(),
     )

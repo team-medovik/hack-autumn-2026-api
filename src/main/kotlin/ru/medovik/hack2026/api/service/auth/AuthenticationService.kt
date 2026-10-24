@@ -7,10 +7,13 @@ import org.springframework.http.ResponseCookie
 import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.stereotype.Service
 import ru.medovik.hack2026.api.dto.request.auth.LoginRequest
+import ru.medovik.hack2026.api.dto.request.auth.ChangePasswordRequest
 import ru.medovik.hack2026.api.dto.response.auth.AuthenticationResponse
 import ru.medovik.hack2026.api.dto.response.auth.CurrentUserResponse
 import ru.medovik.hack2026.api.exception.AuthenticationException
 import ru.medovik.hack2026.api.exception.UserNotFoundException
+import ru.medovik.hack2026.api.exception.InvalidCurrentPasswordException
+import ru.medovik.hack2026.api.exception.WeakPasswordException
 import ru.medovik.hack2026.api.jooq.tables.pojos.UserAccounts
 import ru.medovik.hack2026.api.properties.AuthProperties
 import ru.medovik.hack2026.api.repository.auth.UserAccountRepository
@@ -66,6 +69,7 @@ class AuthenticationService(
         if (!jwtService.isValidRefreshToken(
                 token = refreshToken,
                 login = account.login,
+                version = requireNotNull(account.refreshVersion),
             )
         ) {
             throw AuthenticationException("Некорректный refresh-токен")
@@ -90,6 +94,29 @@ class AuthenticationService(
             ).toString(),
         )
         logger.info("Refresh session cookie cleared")
+    }
+
+    @org.springframework.transaction.annotation.Transactional
+    fun changePassword(login: String, request: ChangePasswordRequest, response: HttpServletResponse) {
+        val account = accounts.findByLogin(login) ?: throw UserNotFoundException("Учётная запись сотрудника не найдена")
+        if (!passwordEncoder.matches(request.currentPassword, account.passwordHash)) {
+            throw InvalidCurrentPasswordException()
+        }
+        val password = request.newPassword
+        if (password.length !in 8..255 || !password.any(Char::isLowerCase) ||
+            !password.any(Char::isUpperCase) || !password.any(Char::isDigit)
+        ) {
+            throw WeakPasswordException()
+        }
+        val changed = accounts.changePassword(
+            id = requireNotNull(account.id),
+            passwordHash = requireNotNull(passwordEncoder.encode(password)),
+        )
+        response.addHeader(
+            HttpHeaders.SET_COOKIE,
+            refreshCookie(token = jwtService.createRefreshToken(changed)).toString(),
+        )
+        logger.info("Account password changed: userId={}", account.id)
     }
 
     private fun createSession(

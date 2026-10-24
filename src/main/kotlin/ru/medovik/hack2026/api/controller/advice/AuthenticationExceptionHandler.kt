@@ -16,10 +16,46 @@ import ru.medovik.hack2026.api.exception.UserNotFoundException
 import ru.medovik.hack2026.api.exception.ModelSettingsConflictException
 import ru.medovik.hack2026.api.exception.InvalidModelSettingsException
 import ru.medovik.hack2026.api.dto.settings.ModelSettingsConflict
+import ru.medovik.hack2026.api.exception.InvalidCurrentPasswordException
+import ru.medovik.hack2026.api.exception.WeakPasswordException
+import ru.medovik.hack2026.api.exception.InvalidSnapshotException
+import ru.medovik.hack2026.api.service.snapshot.SnapshotTooLargeException
 
 @RestControllerAdvice
 class AuthenticationExceptionHandler {
     private val logger = LoggerFactory.getLogger(AuthenticationExceptionHandler::class.java)
+
+    @ExceptionHandler(InvalidSnapshotException::class)
+    fun invalidSnapshot(exception: InvalidSnapshotException, request: HttpServletRequest) = error(
+        status = HttpStatus.UNPROCESSABLE_ENTITY,
+        code = "UNPROCESSABLE_ENTITY",
+        message = exception.message ?: "Некорректный файл снимка",
+        request = request,
+    )
+
+    @ExceptionHandler(SnapshotTooLargeException::class)
+    fun snapshotTooLarge(exception: SnapshotTooLargeException, request: HttpServletRequest) = error(
+        status = HttpStatus.CONTENT_TOO_LARGE,
+        code = "CONTENT_TOO_LARGE",
+        message = exception.message ?: "Файл слишком большой",
+        request = request,
+    )
+
+    @ExceptionHandler(InvalidCurrentPasswordException::class)
+    fun invalidCurrentPassword(exception: InvalidCurrentPasswordException, request: HttpServletRequest) = error(
+        status = HttpStatus.BAD_REQUEST,
+        code = "INVALID_CURRENT_PASSWORD",
+        message = exception.message ?: "Неверный текущий пароль",
+        request = request,
+    )
+
+    @ExceptionHandler(WeakPasswordException::class)
+    fun weakPassword(exception: WeakPasswordException, request: HttpServletRequest) = error(
+        status = HttpStatus.UNPROCESSABLE_ENTITY,
+        code = "WEAK_PASSWORD",
+        message = exception.message ?: "Пароль не соответствует требованиям",
+        request = request,
+    )
 
     @ExceptionHandler(
         AuthenticationException::class,
@@ -54,10 +90,14 @@ class AuthenticationExceptionHandler {
 
     @ExceptionHandler(HttpMessageNotReadableException::class)
     fun unreadableBody(exception: HttpMessageNotReadableException, request: HttpServletRequest) = error(
-        status = if (request.requestURI == "/api/v1/settings/model") {
+        status = if (request.requestURI in setOf(
+                "/api/v1/settings/model", "/api/v1/settings/calculation-date", "/api/v1/snapshots"
+            )) {
             HttpStatus.UNPROCESSABLE_ENTITY
         } else HttpStatus.BAD_REQUEST,
-        code = if (request.requestURI == "/api/v1/settings/model") "UNPROCESSABLE_ENTITY" else "INVALID_REQUEST",
+        code = if (request.requestURI in setOf(
+                "/api/v1/settings/model", "/api/v1/settings/calculation-date", "/api/v1/snapshots"
+            )) "UNPROCESSABLE_ENTITY" else "INVALID_REQUEST",
         message = "Некорректное тело запроса",
         request = request,
     )
@@ -94,8 +134,12 @@ class AuthenticationExceptionHandler {
         exception: IllegalArgumentException,
         request: HttpServletRequest,
     ) = error(
-        status = HttpStatus.BAD_REQUEST,
-        code = "INVALID_REQUEST",
+        status = if (request.requestURI == "/api/v1/settings/calculation-date") {
+            HttpStatus.UNPROCESSABLE_ENTITY
+        } else HttpStatus.BAD_REQUEST,
+        code = if (request.requestURI == "/api/v1/settings/calculation-date") {
+            "UNPROCESSABLE_ENTITY"
+        } else "INVALID_REQUEST",
         message = exception.message ?: "Некорректный запрос",
         request = request,
     )

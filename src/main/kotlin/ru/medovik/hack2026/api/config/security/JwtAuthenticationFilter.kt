@@ -75,7 +75,7 @@ class JwtAuthenticationFilter(
         response: HttpServletResponse,
         path: String,
     ) {
-        logger.warn("JWT authentication rejected: path={}", path)
+        logger.debug("JWT authentication rejected: path={}", path)
         response.status = HttpServletResponse.SC_UNAUTHORIZED
         response.characterEncoding = Charsets.UTF_8.name()
         response.contentType = MediaType.APPLICATION_JSON_VALUE

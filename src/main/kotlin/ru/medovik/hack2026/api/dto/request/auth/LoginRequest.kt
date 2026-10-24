@@ -10,7 +10,7 @@ data class LoginRequest(
     val login: String,
     @field:Schema(
         description = "Пароль сотрудника. Никогда не возвращается API.",
-        example = "correct-horse-battery-staple"
+        accessMode = Schema.AccessMode.WRITE_ONLY,
     )
     val password: String,
 )

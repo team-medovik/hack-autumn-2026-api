@@ -56,7 +56,11 @@ class UserAccountRepository(
         status: String,
     ) {
         dsl.update(USER_ACCOUNTS)
-            .set(USER_ACCOUNTS.PASSWORD_HASH, passwordHash)
+            .set(
+                USER_ACCOUNTS.PASSWORD_HASH,
+                org.jooq.impl.DSL.`when`(USER_ACCOUNTS.PASSWORD_SELF_CHANGED.eq(true), USER_ACCOUNTS.PASSWORD_HASH)
+                    .otherwise(passwordHash),
+            )
             .set(USER_ACCOUNTS.ROLE, role)
             .set(USER_ACCOUNTS.STATUS, status)
             .set(USER_ACCOUNTS.UPDATED_AT, org.jooq.impl.DSL.currentOffsetDateTime())
@@ -80,4 +84,15 @@ class UserAccountRepository(
         .deleteFrom(USER_ACCOUNTS)
         .where(USER_ACCOUNTS.ID.eq(id))
         .execute()
+
+    fun changePassword(id: UUID, passwordHash: String): UserAccounts = dsl
+        .update(USER_ACCOUNTS)
+        .set(USER_ACCOUNTS.PASSWORD_HASH, passwordHash)
+        .set(USER_ACCOUNTS.PASSWORD_SELF_CHANGED, true)
+        .set(USER_ACCOUNTS.REFRESH_VERSION, USER_ACCOUNTS.REFRESH_VERSION.plus(1))
+        .set(USER_ACCOUNTS.UPDATED_AT, org.jooq.impl.DSL.currentOffsetDateTime())
+        .where(USER_ACCOUNTS.ID.eq(id))
+        .returning()
+        .fetchOneInto(UserAccounts::class.java)
+        ?: error("Не удалось изменить пароль")
 }
