@@ -17,7 +17,7 @@ app:
     oidc:
       enabled: ${APP_AUTH_OIDC_ENABLED:false}
       success-redirect-uri: ${APP_AUTH_OIDC_SUCCESS_REDIRECT_URI:/}
-      registrations: {}
+#      registrations: {}
 
 springdoc:
   api-docs:

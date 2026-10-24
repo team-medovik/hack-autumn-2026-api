@@ -67,18 +67,22 @@ class JwtAuthenticationFilter(
         filterChain.doFilter(request, response)
     }
 
-    private fun writeInvalidToken(response: HttpServletResponse, path: String) {
+    private fun writeInvalidToken(
+        response: HttpServletResponse,
+        path: String,
+    ) {
         logger.warn("JWT authentication rejected: path={}", path)
         response.status = HttpServletResponse.SC_UNAUTHORIZED
+        response.characterEncoding = Charsets.UTF_8.name()
         response.contentType = MediaType.APPLICATION_JSON_VALUE
         jsonMapper.writeValue(
             response.writer,
             ApiErrorResponse(
-                status = 401,
+                status = HttpServletResponse.SC_UNAUTHORIZED,
                 error = "INVALID_TOKEN",
                 message = "Access-токен некорректен или истёк",
-                path = path
-            )
+                path = path,
+            ),
         )
     }
 

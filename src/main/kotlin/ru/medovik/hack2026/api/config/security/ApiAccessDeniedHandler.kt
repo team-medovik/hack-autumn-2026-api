@@ -23,6 +23,7 @@ class ApiAccessDeniedHandler(
     ) {
         logger.warn("Forbidden request rejected: method={}, path={}", request.method, request.requestURI)
         response.status = HttpServletResponse.SC_FORBIDDEN
+        response.characterEncoding = Charsets.UTF_8.name()
         response.contentType = MediaType.APPLICATION_JSON_VALUE
         jsonMapper.writeValue(
             response.writer,

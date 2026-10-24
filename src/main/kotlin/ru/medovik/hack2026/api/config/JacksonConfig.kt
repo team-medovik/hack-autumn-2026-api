@@ -7,7 +7,7 @@ import tools.jackson.module.kotlin.KotlinFeature
 import tools.jackson.module.kotlin.KotlinModule
 
 @Configuration
-class JacksonConfiguration {
+class JacksonConfig {
 
     @Bean
     fun jsonMapperBuilderCustomizer(): JsonMapperBuilderCustomizer = JsonMapperBuilderCustomizer { builder ->

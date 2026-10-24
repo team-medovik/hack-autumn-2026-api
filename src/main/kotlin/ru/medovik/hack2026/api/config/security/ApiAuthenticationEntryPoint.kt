@@ -19,19 +19,20 @@ class ApiAuthenticationEntryPoint(
     override fun commence(
         request: HttpServletRequest,
         response: HttpServletResponse,
-        authException: AuthenticationException
+        authException: AuthenticationException,
     ) {
         logger.warn("Unauthenticated request rejected: method={}, path={}", request.method, request.requestURI)
         response.status = HttpServletResponse.SC_UNAUTHORIZED
+        response.characterEncoding = Charsets.UTF_8.name()
         response.contentType = MediaType.APPLICATION_JSON_VALUE
         jsonMapper.writeValue(
             response.writer,
             ApiErrorResponse(
-                status = 401,
+                status = HttpServletResponse.SC_UNAUTHORIZED,
                 error = "UNAUTHORIZED",
                 message = "Требуется аутентификация",
-                path = request.requestURI
-            )
+                path = request.requestURI,
+            ),
         )
     }
 }
