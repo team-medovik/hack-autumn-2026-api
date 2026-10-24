@@ -6,6 +6,9 @@ enum class PaymentTerm {
     @JsonProperty("hour")
     HOUR,
 
+    @JsonProperty("day")
+    DAY,
+
     @JsonProperty("week")
     WEEK,
 

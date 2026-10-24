@@ -27,6 +27,7 @@ class ExposureCalculator {
         val seconds = Duration.between(first, end).seconds
         val periods = when (term) {
             PaymentTerm.HOUR -> seconds / 3600
+            PaymentTerm.DAY -> seconds / 86400
             PaymentTerm.WEEK -> seconds / (7 * 86400)
             else -> {
                 val monthsPerPeriod = when (term) {
@@ -47,11 +48,12 @@ class ExposureCalculator {
         return Math.addExact(periods, 1L)
     }
 
-    // A normalized 30-day month for hour/week; calendar tariffs are divided by their month count.
+    // A normalized 30-day month for hour/day/week; calendar tariffs are divided by their month count.
     // Round once per service, HALF_UP to integer eurocents; customer totals sum these displayed values.
     private fun monthlyLoss(service: Service): Long {
         val (numerator, denominator) = when (service.paymentTerm) {
             PaymentTerm.HOUR -> 720L to 1L
+            PaymentTerm.DAY -> 30L to 1L
             PaymentTerm.WEEK -> 30L to 7L
             PaymentTerm.MONTH -> 1L to 1L
             PaymentTerm.QUARTER_YEAR -> 1L to 3L
