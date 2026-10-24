@@ -3,6 +3,7 @@ package ru.medovik.hack2026.api.service.dashboard
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Isolation
 import org.springframework.transaction.annotation.Transactional
+import org.slf4j.LoggerFactory
 import ru.medovik.hack2026.api.dto.request.risk.Account
 import ru.medovik.hack2026.api.dto.request.risk.PaymentTerm
 import ru.medovik.hack2026.api.dto.request.risk.RiskSnapshot
@@ -44,11 +45,15 @@ class DashboardService(
     private val jsonMapper: JsonMapper,
 ) {
     private val riskEngine = RiskEngine()
+    private val logger = LoggerFactory.getLogger(javaClass)
 
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     fun getDashboard(): DashboardResponse {
         val history = snapshots.findDashboardHistory()
-        if (history.isEmpty()) return emptyDashboard()
+        if (history.isEmpty()) {
+            logger.debug("Dashboard requested without billing snapshots")
+            return emptyDashboard()
+        }
 
         val current = load(history.first())
         val clients = project(current)
@@ -97,7 +102,7 @@ class DashboardService(
             }
             .sortedWith(compareByDescending<LossReason> { it.monthlyLoss }.thenBy { it.id })
 
-        return DashboardResponse(
+        val response = DashboardResponse(
             snapshot = SnapshotInfo(id = current.stored.id, takenAt = current.stored.takenAt),
             monthlyLoss = clients.sumMoney { it.monthlyLoss },
             riskBuckets = buckets,
@@ -119,6 +124,16 @@ class DashboardService(
             lossReasons = reasons,
             churn = churn(current = current, history = history),
         )
+        logger.debug(
+            "Dashboard built: snapshotId={}, historySize={}, clients={}, riskQueue={}, lossReasons={}, churnWeeks={}",
+            current.stored.id,
+            history.size,
+            clients.size,
+            response.riskQueue.items.size,
+            response.lossReasons.size,
+            response.churn.weeks.size,
+        )
+        return response
     }
 
     fun listClients(
@@ -142,6 +157,15 @@ class DashboardService(
 
         val stored = snapshots.findLatest()
         if (stored == null) {
+            logger.debug(
+                "Client list requested without billing snapshots: level={}, searchPresent={}, sort={}, order={}, page={}, pageSize={}",
+                normalizedLevel,
+                search.isNullOrBlank().not(),
+                sortField,
+                direction,
+                requestedPage,
+                size,
+            )
             return ClientsResponse(
                 items = emptyList(),
                 page = 1,
@@ -164,7 +188,7 @@ class DashboardService(
         val lastPage = if (sorted.isEmpty()) 1 else (sorted.size - 1) / size + 1
         val actualPage = requestedPage.coerceAtMost(lastPage)
         val first = (actualPage - 1) * size
-        return ClientsResponse(
+        val response = ClientsResponse(
             items = sorted.drop(first).take(size).map { client ->
                 ClientListItem(
                     id = client.account.id.toString(),
@@ -182,15 +206,38 @@ class DashboardService(
             total = sorted.size,
             levelCounts = counts(clients),
         )
+        logger.debug(
+            "Client list built: snapshotId={}, level={}, searchPresent={}, sort={}, order={}, requestedPage={}, page={}, pageSize={}, total={}",
+            stored.id,
+            normalizedLevel,
+            query != null,
+            sortField,
+            direction,
+            requestedPage,
+            response.page,
+            size,
+            response.total,
+        )
+        return response
     }
 
     private fun load(stored: StoredBillingSnapshot): LoadedSnapshot {
-        val payload = jsonMapper.readValue(stored.payload, RiskSnapshot::class.java)
-        val result = riskEngine.calculate(
-            snapshot = payload,
-            evaluationTime = stored.takenAt.toInstant(),
-        )
-        return LoadedSnapshot(stored = stored, payload = payload, risk = result)
+        try {
+            val payload = jsonMapper.readValue(stored.payload, RiskSnapshot::class.java)
+            val result = riskEngine.calculate(
+                snapshot = payload,
+                evaluationTime = stored.takenAt.toInstant(),
+            )
+            return LoadedSnapshot(stored = stored, payload = payload, risk = result)
+        } catch (exception: Exception) {
+            logger.error(
+                "Billing snapshot could not be evaluated for dashboard: snapshotId={}, takenAt={}",
+                stored.id,
+                stored.takenAt,
+                exception,
+            )
+            throw exception
+        }
     }
 
     private fun project(snapshot: LoadedSnapshot): List<ClientProjection> {
