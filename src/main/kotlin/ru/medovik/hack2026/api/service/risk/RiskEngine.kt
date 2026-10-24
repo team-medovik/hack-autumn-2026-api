@@ -1,6 +1,7 @@
 package ru.medovik.hack2026.api.service.risk
 
 import ru.medovik.hack2026.api.dto.request.risk.RiskSettings
+import ru.medovik.hack2026.api.dto.request.risk.Account
 import ru.medovik.hack2026.api.dto.request.risk.RiskSnapshot
 import ru.medovik.hack2026.api.dto.request.risk.Service
 import ru.medovik.hack2026.api.dto.request.risk.ServiceStatus
@@ -16,6 +17,7 @@ import ru.medovik.hack2026.api.service.risk.feature.util.FeatureContext
 import ru.medovik.hack2026.api.service.risk.feature.impl.InsufficientFunds
 import ru.medovik.hack2026.api.service.risk.feature.RiskFeature
 import ru.medovik.hack2026.api.service.risk.feature.impl.SuspendedService
+import ru.medovik.hack2026.api.service.risk.feature.impl.BonusesExceedMoney
 import java.time.Duration
 import java.time.Instant
 
@@ -27,6 +29,7 @@ class RiskEngine(
         AwaitingRenewal(),
         AwaitingRenewalWithoutFunds(),
         SuspendedService(),
+        BonusesExceedMoney(),
     ),
     private val balanceSimulator: BalanceSimulator = BalanceSimulator(),
     private val customerAggregator: CustomerRiskAggregator = CustomerRiskAggregator(),
@@ -45,11 +48,18 @@ class RiskEngine(
         val settingsSnapshot = settings.copy(weights = settings.weights.toMap())
         val horizonEnd = evaluationTime.plus(Duration.ofDays(settings.horizonDays.toLong()))
         val servicesByOwner = snapshot.services.groupBy { it.ownerId }
+        val accountsById = snapshot.accounts.associateBy { it.id }
         val fundingByAccount = snapshot.accounts.associate { account ->
-            account.id to balanceSimulator.calculate(account, servicesByOwner[account.id].orEmpty(), horizonEnd)
+            account.id to balanceSimulator.calculate(
+                account = account,
+                services = servicesByOwner[account.id].orEmpty(),
+                horizonEnd = horizonEnd,
+                settings = settingsSnapshot,
+            )
         }
         val serviceResults = snapshot.services.sortedBy { it.id }.map { service ->
             score(
+                account = accountsById.getValue(service.ownerId),
                 service = service,
                 funding = fundingByAccount.getValue(service.ownerId),
                 settings = settingsSnapshot,
@@ -74,12 +84,19 @@ class RiskEngine(
     }
 
     private fun score(
+        account: Account,
         service: Service,
         funding: FundingSummary,
         settings: RiskSettings,
         evaluationTime: Instant,
     ): ServiceRiskResult {
-        val context = FeatureContext(service, funding, settings, evaluationTime)
+        val context = FeatureContext(
+            account = account,
+            service = service,
+            funding = funding,
+            settings = settings,
+            evaluationTime = evaluationTime,
+        )
         val contributions = if (!service.status.isLive) emptyList() else features.map { feature ->
             val evaluated = feature.evaluate(context)
             val weight = settings.weights.getValue(feature.code)
