@@ -285,6 +285,7 @@ jobs:
             --network host \
             --user "$(id -u):$(id -g)" \
             -v "$JAR_DIR:/download" \
+            -e MC_CONFIG_DIR=/tmp/.mc \
             -e MINIO_ENDPOINT="$MINIO_ENDPOINT" \
             -e MINIO_ACCESS_KEY="$MINIO_ACCESS_KEY" \
             -e MINIO_SECRET_KEY="$MINIO_SECRET_KEY" \
