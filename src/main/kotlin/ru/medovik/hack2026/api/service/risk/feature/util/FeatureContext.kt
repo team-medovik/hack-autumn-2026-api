@@ -2,11 +2,13 @@ package ru.medovik.hack2026.api.service.risk.feature.util
 
 import ru.medovik.hack2026.api.dto.request.risk.RiskSettings
 import ru.medovik.hack2026.api.dto.request.risk.Service
+import ru.medovik.hack2026.api.dto.request.risk.Account
 import ru.medovik.hack2026.api.dto.response.risk.FundingSummary
 import java.time.Duration
 import java.time.Instant
 
 data class FeatureContext(
+    val account: Account,
     val service: Service,
     val funding: FundingSummary,
     val settings: RiskSettings,

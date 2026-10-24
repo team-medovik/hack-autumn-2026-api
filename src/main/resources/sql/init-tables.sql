@@ -31,3 +31,11 @@ CREATE TABLE billing_snapshots (
 );
 
 CREATE INDEX idx_billing_snapshots_taken_at ON billing_snapshots (taken_at DESC, id DESC);
+
+CREATE TABLE model_settings (
+    version BIGINT PRIMARY KEY,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    updated_by VARCHAR(255) NOT NULL,
+    payload JSONB NOT NULL,
+    CONSTRAINT model_settings_payload_object CHECK (jsonb_typeof(payload) = 'object')
+);

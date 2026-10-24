@@ -13,6 +13,9 @@ import ru.medovik.hack2026.api.exception.AuthenticationException
 import ru.medovik.hack2026.api.exception.UserAlreadyExistsException
 import ru.medovik.hack2026.api.exception.UserDeletionForbiddenException
 import ru.medovik.hack2026.api.exception.UserNotFoundException
+import ru.medovik.hack2026.api.exception.ModelSettingsConflictException
+import ru.medovik.hack2026.api.exception.InvalidModelSettingsException
+import ru.medovik.hack2026.api.dto.settings.ModelSettingsConflict
 
 @RestControllerAdvice
 class AuthenticationExceptionHandler {
@@ -21,7 +24,6 @@ class AuthenticationExceptionHandler {
     @ExceptionHandler(
         AuthenticationException::class,
         MissingRequestCookieException::class,
-        HttpMessageNotReadableException::class,
     )
     fun authenticationFailed(
         exception: Exception,
@@ -30,6 +32,33 @@ class AuthenticationExceptionHandler {
         status = HttpStatus.UNAUTHORIZED,
         code = "AUTHENTICATION_ERROR",
         message = exception.message ?: "Некорректный запрос аутентификации",
+        request = request,
+    )
+
+    @ExceptionHandler(ModelSettingsConflictException::class)
+    fun modelSettingsConflict(exception: ModelSettingsConflictException): ResponseEntity<ModelSettingsConflict> =
+        ResponseEntity.status(HttpStatus.CONFLICT).body(
+            ModelSettingsConflict(
+                message = exception.message ?: "Настройки уже сохранили в другой версии",
+                current = exception.current,
+            )
+        )
+
+    @ExceptionHandler(InvalidModelSettingsException::class)
+    fun invalidModelSettings(exception: InvalidModelSettingsException, request: HttpServletRequest) = error(
+        status = HttpStatus.UNPROCESSABLE_ENTITY,
+        code = "UNPROCESSABLE_ENTITY",
+        message = exception.message ?: "Некорректные параметры модели",
+        request = request,
+    )
+
+    @ExceptionHandler(HttpMessageNotReadableException::class)
+    fun unreadableBody(exception: HttpMessageNotReadableException, request: HttpServletRequest) = error(
+        status = if (request.requestURI == "/api/v1/settings/model") {
+            HttpStatus.UNPROCESSABLE_ENTITY
+        } else HttpStatus.BAD_REQUEST,
+        code = if (request.requestURI == "/api/v1/settings/model") "UNPROCESSABLE_ENTITY" else "INVALID_REQUEST",
+        message = "Некорректное тело запроса",
         request = request,
     )
 

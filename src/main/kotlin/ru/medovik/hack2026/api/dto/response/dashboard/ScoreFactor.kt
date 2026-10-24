@@ -9,5 +9,5 @@ data class ScoreFactor(
     @field:Schema(description = "Готовое к показу название фактора.", example = "Ожидает оплаты")
     val label: String,
     @field:Schema(description = "Вклад фактора в оценку риска.", example = "70", minimum = "0", maximum = "100")
-    val points: Int,
+    val points: Double,
 )

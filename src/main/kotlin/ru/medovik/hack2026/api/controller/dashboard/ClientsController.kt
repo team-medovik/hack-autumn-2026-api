@@ -9,10 +9,13 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses
 import io.swagger.v3.oas.annotations.security.SecurityRequirement
 import io.swagger.v3.oas.annotations.tags.Tag
 import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 import ru.medovik.hack2026.api.dto.response.dashboard.ClientsResponse
+import ru.medovik.hack2026.api.dto.response.client.ClientCard
+import ru.medovik.hack2026.api.dto.response.client.ClientPosition
 import ru.medovik.hack2026.api.dto.response.common.ApiErrorResponse
 import ru.medovik.hack2026.api.service.dashboard.DashboardService
 
@@ -97,5 +100,35 @@ class ClientsController(
         order = order,
         page = page,
         pageSize = pageSize,
+    )
+
+    @GetMapping("/{id}")
+    @Operation(operationId = "getClientCard", summary = "Карточка клиента")
+    @ApiResponses(
+        ApiResponse(responseCode = "200", description = "Карточка получена"),
+        ApiResponse(responseCode = "401", description = "Требуется авторизация"),
+        ApiResponse(responseCode = "404", description = "Клиент не найден"),
+    )
+    fun getClientCard(@PathVariable id: String): ClientCard = dashboardService.getClientCard(id = id)
+
+    @GetMapping("/{id}/position")
+    @Operation(operationId = "getClientPosition", summary = "Место клиента в списке и его соседи")
+    @ApiResponses(
+        ApiResponse(responseCode = "200", description = "Позиция получена"),
+        ApiResponse(responseCode = "401", description = "Требуется авторизация"),
+        ApiResponse(responseCode = "404", description = "Клиент не найден"),
+    )
+    fun getClientPosition(
+        @PathVariable id: String,
+        @RequestParam(required = false) level: String?,
+        @RequestParam(required = false) search: String?,
+        @RequestParam(required = false) sort: String?,
+        @RequestParam(required = false) order: String?,
+    ): ClientPosition = dashboardService.getClientPosition(
+        id = id,
+        level = level,
+        search = search,
+        sort = sort,
+        order = order,
     )
 }
