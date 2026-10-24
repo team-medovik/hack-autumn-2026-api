@@ -34,11 +34,14 @@ class JwtService(
         type = "access",
     )
 
-    fun isValidRefreshToken(token: String, login: String): Boolean = isValid(
-        token = token,
-        login = login,
-        type = "refresh",
-    )
+    fun isValidRefreshToken(token: String, login: String, version: Long): Boolean = try {
+        claims(token).let {
+            it.subject == login && it["typ"] == "refresh" && it.expiration.after(Date()) &&
+                (it["sv"] as? Number)?.toLong() == version
+        }
+    } catch (_: Exception) {
+        false
+    }
 
     private fun createToken(
         account: UserAccounts,
@@ -49,6 +52,7 @@ class JwtService(
         .claim("uid", account.id.toString())
         .claim("role", account.role)
         .claim("typ", type)
+        .claim("sv", account.refreshVersion)
         .issuedAt(Date.from(Instant.now()))
         .expiration(Date.from(Instant.now().plus(ttl)))
         .signWith(signingKey)

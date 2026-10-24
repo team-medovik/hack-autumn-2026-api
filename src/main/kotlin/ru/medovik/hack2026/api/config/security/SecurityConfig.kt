@@ -22,7 +22,6 @@ class SecurityConfig {
     fun securityFilterChain(
         http: HttpSecurity,
         jwtAuthenticationFilter: JwtAuthenticationFilter,
-        requestLoggingFilter: RequestLoggingFilter,
         apiAuthenticationEntryPoint: ApiAuthenticationEntryPoint,
         apiAccessDeniedHandler: ApiAccessDeniedHandler,
         localOidcUserService: LocalOidcUserService,
@@ -85,7 +84,6 @@ class SecurityConfig {
         }
         return http
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter::class.java)
-            .addFilterAfter(requestLoggingFilter, JwtAuthenticationFilter::class.java)
             .build()
     }
 }

@@ -21,7 +21,7 @@ class ApiAuthenticationEntryPoint(
         response: HttpServletResponse,
         authException: AuthenticationException,
     ) {
-        logger.warn("Unauthenticated request rejected: method={}, path={}", request.method, request.requestURI)
+        logger.debug("Unauthenticated request rejected: method={}, path={}", request.method, request.requestURI)
         response.status = HttpServletResponse.SC_UNAUTHORIZED
         response.characterEncoding = Charsets.UTF_8.name()
         response.contentType = MediaType.APPLICATION_JSON_VALUE

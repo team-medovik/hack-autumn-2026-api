@@ -8,5 +8,6 @@ data class AuthenticationResponse(
     val accessToken: String,
     @field:Schema(description = "Время жизни access-токена в секундах.", example = "900")
     val expiresIn: Long,
+    @field:Schema(description = "Данные вошедшего сотрудника")
     val user: CurrentUserResponse,
 )
