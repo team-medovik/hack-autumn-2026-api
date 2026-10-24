@@ -7,8 +7,8 @@ import java.util.UUID
 @Schema(description = "Учётная запись сотрудника в административном разделе.")
 data class AdminUserResponse(
     val id: UUID,
-    @field:Schema(example = "employee@example.com")
-    val email: String,
+    @field:Schema(example = "employee")
+    val login: String,
     @field:Schema(example = "EMPLOYEE")
     val role: String,
     @field:Schema(example = "ACTIVE")

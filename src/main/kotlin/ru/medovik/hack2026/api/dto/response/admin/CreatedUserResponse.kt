@@ -7,7 +7,7 @@ import java.util.UUID
 @Schema(description = "Созданный сотрудник и временный пароль. Пароль показывается только в этом ответе.")
 data class CreatedUserResponse(
     val id: UUID,
-    val email: String,
+    val login: String,
     val role: String,
     val status: String,
     val createdAt: OffsetDateTime,

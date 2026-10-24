@@ -1,15 +1,16 @@
 CREATE TABLE user_accounts (
     id UUID PRIMARY KEY,
-    email VARCHAR(255) NOT NULL UNIQUE,
+    login VARCHAR(255) NOT NULL UNIQUE,
     password_hash TEXT NOT NULL,
     role VARCHAR(32) NOT NULL DEFAULT 'EMPLOYEE',
     status VARCHAR(32) NOT NULL DEFAULT 'ACTIVE',
     provisioning_source VARCHAR(32) NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT user_accounts_login_length CHECK (char_length(login) > 3)
 );
 
-CREATE INDEX idx_user_accounts_email ON user_accounts (email);
+CREATE INDEX idx_user_accounts_login ON user_accounts (login);
 
 CREATE TABLE oidc_identities (
     id UUID PRIMARY KEY,

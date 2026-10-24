@@ -28,15 +28,15 @@ class JwtService(
         ttl = properties.refreshTokenTtl,
     )
 
-    fun isValidAccessToken(token: String, email: String): Boolean = isValid(
+    fun isValidAccessToken(token: String, login: String): Boolean = isValid(
         token = token,
-        email = email,
+        login = login,
         type = "access",
     )
 
-    fun isValidRefreshToken(token: String, email: String): Boolean = isValid(
+    fun isValidRefreshToken(token: String, login: String): Boolean = isValid(
         token = token,
-        email = email,
+        login = login,
         type = "refresh",
     )
 
@@ -45,7 +45,7 @@ class JwtService(
         type: String,
         ttl: java.time.Duration,
     ): String = Jwts.builder()
-        .subject(account.email)
+        .subject(account.login)
         .claim("uid", account.id.toString())
         .claim("role", account.role)
         .claim("typ", type)
@@ -58,10 +58,10 @@ class JwtService(
 
     private fun isValid(
         token: String,
-        email: String,
+        login: String,
         type: String,
     ): Boolean = try {
-        claims(token).let { it.subject == email && it["typ"] == type && it.expiration.after(Date()) }
+        claims(token).let { it.subject == login && it["typ"] == type && it.expiration.after(Date()) }
     } catch (_: Exception) {
         false
     }

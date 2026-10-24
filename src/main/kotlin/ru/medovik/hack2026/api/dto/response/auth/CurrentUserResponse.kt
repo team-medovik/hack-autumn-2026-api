@@ -8,8 +8,8 @@ import java.util.UUID
 data class CurrentUserResponse(
     @field:Schema(example = "550e8400-e29b-41d4-a716-446655440000")
     val id: UUID,
-    @field:Schema(example = "admin@example.com")
-    val email: String,
+    @field:Schema(example = "admin")
+    val login: String,
     @field:Schema(description = "Роль в приложении, заданная при заведении сотрудника.", example = "ADMIN")
     val role: String,
     val createdAt: OffsetDateTime,

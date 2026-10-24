@@ -32,8 +32,8 @@ class ExternalUsersEnvFile {
         if (path == loadedPath && modified == lastModified) return
 
         val users = parse(path)
-        require(users.map { it.email.trim().lowercase() }.distinct().size == users.size) {
-            "В файле пользователей повторяется email"
+        require(users.map { AccountLogin.normalize(it.login) }.distinct().size == users.size) {
+            "В файле пользователей повторяется логин"
         }
         action(users)
         initialized = true
@@ -61,7 +61,9 @@ class ExternalUsersEnvFile {
             .map { index ->
                 val prefix = "USERS_${index}_"
                 ExternalUserDefinition(
-                    email = requireNotNull(values["${prefix}EMAIL"]) { "Не задан ${prefix}EMAIL" },
+                    login = values["${prefix}LOGIN"] ?: requireNotNull(values["${prefix}EMAIL"]) {
+                        "Не задан ${prefix}LOGIN"
+                    },
                     password = requireNotNull(values["${prefix}PASSWORD"]) { "Не задан ${prefix}PASSWORD" },
                     role = values["${prefix}ROLE"]?.uppercase()?.let(AccountRole::valueOf)
                         ?: AccountRole.EMPLOYEE,
@@ -72,7 +74,7 @@ class ExternalUsersEnvFile {
     }
 
     private companion object {
-        val USER_KEY = Regex("USERS_(\\d+)_(EMAIL|PASSWORD|ROLE|STATUS)")
+        val USER_KEY = Regex("USERS_(\\d+)_(LOGIN|EMAIL|PASSWORD|ROLE|STATUS)")
         val USERS_FILE_PATHS = listOf(
             Path.of("/config/users.env"),
             Path.of("src/main/resources/users.env"),

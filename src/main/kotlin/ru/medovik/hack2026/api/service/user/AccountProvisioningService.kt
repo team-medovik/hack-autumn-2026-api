@@ -29,9 +29,9 @@ class AccountProvisioningService(
     @Transactional
     fun synchronizeExternalUsers() {
         usersFile.processIfChanged { definitions ->
-            val emails = definitions.map { definition -> normalizedEmail(definition.email) }
+            val logins = definitions.map { definition -> AccountLogin.normalize(definition.login) }
             definitions.forEach(::upsertExternalUser)
-            val deleted = repository.deleteExternalUsersExcept(emails)
+            val deleted = repository.deleteExternalUsersExcept(logins)
             logger.info(
                 "External users synchronized: configured={}, deleted={}",
                 definitions.size,
@@ -41,15 +41,17 @@ class AccountProvisioningService(
     }
 
     fun createByAdmin(request: CreateUserRequest): CreatedUser {
-        val email = normalizedEmail(request.email)
-        if (repository.findByEmail(email) != null) throw UserAlreadyExistsException("Пользователь с email $email уже существует")
+        val login = AccountLogin.normalize(request.login)
+        if (repository.findByLogin(login) != null) {
+            throw UserAlreadyExistsException("Пользователь с логином $login уже существует")
+        }
         val temporaryPassword = ByteArray(24).also(secureRandom::nextBytes)
             .let(Base64.getUrlEncoder().withoutPadding()::encodeToString)
         val account = try {
             repository.insert(
                 UserAccounts(
                     id = UUID.randomUUID(),
-                    email = email,
+                    login = login,
                     passwordHash = requireNotNull(passwordEncoder.encode(temporaryPassword)),
                     role = request.role.name,
                     status = request.status.name,
@@ -59,26 +61,28 @@ class AccountProvisioningService(
                 )
             )
         } catch (_: DuplicateKeyException) {
-            throw UserAlreadyExistsException("Пользователь с email $email уже существует")
+            throw UserAlreadyExistsException("Пользователь с логином $login уже существует")
         } catch (exception: DataAccessException) {
-            if (exception.sqlState() == "23505") throw UserAlreadyExistsException("Пользователь с email $email уже существует")
+            if (exception.sqlState() == "23505") {
+                throw UserAlreadyExistsException("Пользователь с логином $login уже существует")
+            }
             throw exception
         }
-        logger.info("User account created from admin panel: email={}, role={}", account.email, account.role)
+        logger.info("User account created from admin panel: login={}, role={}", account.login, account.role)
         return CreatedUser(account, temporaryPassword)
     }
 
     fun listUsers(): List<UserAccounts> = repository.findAll()
 
     @Transactional
-    fun deleteByAdmin(id: UUID, actorEmail: String) {
+    fun deleteByAdmin(id: UUID, actorLogin: String) {
         val account = repository.findById(id)
             ?: throw NoSuchElementException("Учётная запись сотрудника не найдена")
-        if (account.email == actorEmail) throw UserDeletionForbiddenException(
+        if (account.login == actorLogin) throw UserDeletionForbiddenException(
             "SELF_DELETION_FORBIDDEN", "Нельзя удалить собственную учётную запись"
         )
         require(account.provisioningSource == AccountSource.ADMIN_PANEL.name) {
-            "Пользователь ${account.email} управляется через окружение и не может быть удалён через API"
+            "Пользователь ${account.login} управляется через окружение и не может быть удалён через API"
         }
         if (account.role == "ADMIN" && account.status == "ACTIVE") {
             val activeAdminIds = repository.lockActiveAdminIds()
@@ -88,20 +92,20 @@ class AccountProvisioningService(
             )
         }
         check(repository.deleteById(id) == 1) { "Не удалось удалить учётную запись пользователя" }
-        logger.info("User account deleted from admin panel: id={}, email={}", id, account.email)
+        logger.info("User account deleted from admin panel: id={}, login={}", id, account.login)
     }
 
     private fun upsertExternalUser(definition: ExternalUserDefinition) {
-        val email = normalizedEmail(definition.email)
-        val existing = repository.findByEmail(email)
+        val login = AccountLogin.normalize(definition.login)
+        val existing = repository.findByLogin(login)
         if (existing == null) {
-            repository.insert(definition.toAccount(email))
-            logger.info("User account created from env file: email={}, role={}", email, definition.role)
+            repository.insert(definition.toAccount(login = login))
+            logger.info("User account created from env file: login={}, role={}", login, definition.role)
             return
         }
 
         require(existing.provisioningSource == AccountSource.ENV_FILE.name) {
-            "Пользователь $email уже создан через панель"
+            "Пользователь $login уже создан через панель"
         }
         repository.updateManagedAccount(
             id = requireNotNull(existing.id),
@@ -109,16 +113,12 @@ class AccountProvisioningService(
             role = definition.role.name,
             status = definition.status.name,
         )
-        logger.info("User account updated from env file: email={}", email)
+        logger.info("User account updated from env file: login={}", login)
     }
 
-    private fun normalizedEmail(value: String): String = value.trim().lowercase().also { email ->
-        require(email.contains('@') && email.length <= 320) { "Некорректный email" }
-    }
-
-    private fun ExternalUserDefinition.toAccount(email: String) = UserAccounts(
+    private fun ExternalUserDefinition.toAccount(login: String) = UserAccounts(
         id = UUID.randomUUID(),
-        email = email,
+        login = login,
         passwordHash = requireNotNull(passwordEncoder.encode(password)),
         role = role.name,
         status = status.name,

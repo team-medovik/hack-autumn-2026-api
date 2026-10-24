@@ -39,7 +39,7 @@ class AdminUsersController(
             .body(
                 CreatedUserResponse(
                     id = account.id,
-                    email = account.email,
+                    login = account.login,
                     role = account.role,
                     status = account.status,
                     createdAt = account.createdAt,
@@ -51,12 +51,12 @@ class AdminUsersController(
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     fun delete(@PathVariable id: UUID, authentication: Authentication) {
-        provisioning.deleteByAdmin(id, authentication.name)
+        provisioning.deleteByAdmin(id = id, actorLogin = authentication.name)
     }
 
     private fun UserAccounts.toResponse() = AdminUserResponse(
         id = id,
-        email = email,
+        login = login,
         role = requireNotNull(role),
         status = requireNotNull(status),
         createdAt = requireNotNull(createdAt),

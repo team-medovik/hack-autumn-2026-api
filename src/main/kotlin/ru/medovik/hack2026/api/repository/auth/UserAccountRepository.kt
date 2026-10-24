@@ -11,14 +11,14 @@ import java.util.UUID
 class UserAccountRepository(
     private val dsl: DSLContext,
 ) {
-    fun findByEmail(email: String): UserAccounts? = dsl
+    fun findByLogin(login: String): UserAccounts? = dsl
         .selectFrom(USER_ACCOUNTS)
-        .where(USER_ACCOUNTS.EMAIL.eq(email))
+        .where(USER_ACCOUNTS.LOGIN.eq(login))
         .fetchOneInto(UserAccounts::class.java)
 
-    fun findActiveByEmail(email: String): UserAccounts? = dsl
+    fun findActiveByLogin(login: String): UserAccounts? = dsl
         .selectFrom(USER_ACCOUNTS)
-        .where(USER_ACCOUNTS.EMAIL.eq(email))
+        .where(USER_ACCOUNTS.LOGIN.eq(login))
         .and(USER_ACCOUNTS.STATUS.eq("ACTIVE"))
         .fetchOneInto(UserAccounts::class.java)
 
@@ -29,7 +29,7 @@ class UserAccountRepository(
 
     fun findAll(): List<UserAccounts> = dsl
         .selectFrom(USER_ACCOUNTS)
-        .orderBy(USER_ACCOUNTS.CREATED_AT, USER_ACCOUNTS.EMAIL)
+        .orderBy(USER_ACCOUNTS.CREATED_AT, USER_ACCOUNTS.LOGIN)
         .fetchInto(UserAccounts::class.java)
 
     fun lockActiveAdminIds(): List<UUID> = dsl
@@ -64,12 +64,12 @@ class UserAccountRepository(
             .execute()
     }
 
-    fun deleteExternalUsersExcept(emails: Collection<String>): Int {
-        val condition = if (emails.isEmpty()) {
+    fun deleteExternalUsersExcept(logins: Collection<String>): Int {
+        val condition = if (logins.isEmpty()) {
             USER_ACCOUNTS.PROVISIONING_SOURCE.eq(AccountSource.ENV_FILE.name)
         } else {
             USER_ACCOUNTS.PROVISIONING_SOURCE.eq(AccountSource.ENV_FILE.name)
-                .and(USER_ACCOUNTS.EMAIL.notIn(emails))
+                .and(USER_ACCOUNTS.LOGIN.notIn(logins))
         }
         return dsl.deleteFrom(USER_ACCOUNTS)
             .where(condition)

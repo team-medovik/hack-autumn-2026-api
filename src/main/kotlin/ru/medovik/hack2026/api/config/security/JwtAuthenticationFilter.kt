@@ -43,7 +43,7 @@ class JwtAuthenticationFilter(
         }
 
         val token = header.removePrefix(BEARER_PREFIX)
-        val email = try {
+        val login = try {
             jwtService.subject(token)
         } catch (_: Exception) {
             writeInvalidToken(
@@ -52,8 +52,12 @@ class JwtAuthenticationFilter(
             )
             return
         }
-        val account = accounts.findByEmail(email)
-        if (account == null || account.status != "ACTIVE" || !jwtService.isValidAccessToken(token, account.email)) {
+        val account = accounts.findByLogin(login)
+        if (account == null || account.status != "ACTIVE" || !jwtService.isValidAccessToken(
+                token = token,
+                login = account.login,
+            )
+        ) {
             writeInvalidToken(
                 response = response,
                 path = request.requestURI,
@@ -63,7 +67,7 @@ class JwtAuthenticationFilter(
 
         val authority = SimpleGrantedAuthority("ROLE_${account.role}")
         SecurityContextHolder.getContext().authentication =
-            UsernamePasswordAuthenticationToken(account.email, null, listOf(authority))
+            UsernamePasswordAuthenticationToken(account.login, null, listOf(authority))
         filterChain.doFilter(request, response)
     }
 

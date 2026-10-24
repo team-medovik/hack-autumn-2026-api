@@ -33,13 +33,13 @@ class AuthenticationService(
     ): AuthenticationResponse {
         provisioning.synchronizeExternalUsers()
 
-        val account = accounts.findByEmail(request.email.trim().lowercase())
-            ?: throw AuthenticationException("Неверный email или пароль")
+        val account = accounts.findByLogin(request.login.trim().lowercase())
+            ?: throw AuthenticationException("Неверный логин или пароль")
         if (account.status != "ACTIVE") {
             throw AuthenticationException("Учётная запись отключена")
         }
         if (!passwordEncoder.matches(request.password, account.passwordHash)) {
-            throw AuthenticationException("Неверный email или пароль")
+            throw AuthenticationException("Неверный логин или пароль")
         }
 
         logger.info("Password login succeeded: userId={}", account.id)
@@ -53,19 +53,19 @@ class AuthenticationService(
         refreshToken: String,
         response: HttpServletResponse,
     ): AuthenticationResponse {
-        val email = try {
+        val login = try {
             jwtService.subject(refreshToken)
         } catch (_: Exception) {
             throw AuthenticationException("Некорректный refresh-токен")
         }
-        val account = accounts.findByEmail(email)
+        val account = accounts.findByLogin(login)
             ?: throw AuthenticationException("Некорректный refresh-токен")
         if (account.status != "ACTIVE") {
             throw AuthenticationException("Учётная запись отключена")
         }
         if (!jwtService.isValidRefreshToken(
                 token = refreshToken,
-                email = account.email,
+                login = account.login,
             )
         ) {
             throw AuthenticationException("Некорректный refresh-токен")
@@ -77,7 +77,7 @@ class AuthenticationService(
         )
     }
 
-    fun currentUser(email: String): CurrentUserResponse = accounts.findByEmail(email)
+    fun currentUser(login: String): CurrentUserResponse = accounts.findByLogin(login)
         ?.toResponse()
         ?: throw UserNotFoundException("Учётная запись сотрудника не найдена")
 
@@ -120,7 +120,7 @@ class AuthenticationService(
 
     private fun UserAccounts.toResponse() = CurrentUserResponse(
         id = id,
-        email = email,
+        login = login,
         role = requireNotNull(role),
         createdAt = requireNotNull(createdAt),
     )
