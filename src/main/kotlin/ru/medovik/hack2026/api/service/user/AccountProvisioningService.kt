@@ -52,6 +52,19 @@ class AccountProvisioningService(
         }
     }
 
+    fun listUsers(): List<UserAccounts> = repository.findAll()
+
+    @Transactional
+    fun deleteByAdmin(id: UUID) {
+        val account = repository.findById(id)
+            ?: throw NoSuchElementException("Учётная запись сотрудника не найдена")
+        require(account.provisioningSource == AccountSource.ADMIN_PANEL.name) {
+            "Пользователь ${account.email} управляется через окружение и не может быть удалён через API"
+        }
+        check(repository.deleteById(id) == 1) { "Не удалось удалить учётную запись пользователя" }
+        logger.info("User account deleted from admin panel: id={}, email={}", id, account.email)
+    }
+
     private fun upsertExternalUser(definition: ExternalUserDefinition) {
         val email = normalizedEmail(definition.email)
         val existing = repository.findByEmail(email)

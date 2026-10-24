@@ -27,6 +27,11 @@ class UserAccountRepository(
         .where(USER_ACCOUNTS.ID.eq(id))
         .fetchOneInto(UserAccounts::class.java)
 
+    fun findAll(): List<UserAccounts> = dsl
+        .selectFrom(USER_ACCOUNTS)
+        .orderBy(USER_ACCOUNTS.CREATED_AT, USER_ACCOUNTS.EMAIL)
+        .fetchInto(UserAccounts::class.java)
+
     fun insert(account: UserAccounts): UserAccounts = dsl
         .insertInto(USER_ACCOUNTS)
         .set(dsl.newRecord(USER_ACCOUNTS, account))
@@ -60,4 +65,9 @@ class UserAccountRepository(
             .where(condition)
             .execute()
     }
+
+    fun deleteById(id: UUID): Int = dsl
+        .deleteFrom(USER_ACCOUNTS)
+        .where(USER_ACCOUNTS.ID.eq(id))
+        .execute()
 }
