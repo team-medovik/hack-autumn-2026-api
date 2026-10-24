@@ -141,6 +141,16 @@ jobs:
           : "${MINIO_ACCESS_KEY:?Repository secret MINIO_ACCESS_KEY is not configured}"
           : "${MINIO_SECRET_KEY:?Repository secret MINIO_SECRET_KEY is not configured}"
 
+          case "$MINIO_ENDPOINT" in
+            http://*|https://*) ;;
+            *) MINIO_ENDPOINT="https://$MINIO_ENDPOINT" ;;
+          esac
+          MINIO_ENDPOINT="${MINIO_ENDPOINT%/}"
+          if [[ "${MINIO_ENDPOINT#*://}" == */* ]]; then
+            echo "MINIO_ENDPOINT must contain only scheme and host[:port]"
+            exit 1
+          fi
+
           ARTIFACT_KEY="${{ steps.artifact_vars.outputs.artifact_key }}"
 
           docker run --rm \
@@ -185,6 +195,23 @@ jobs:
           MINIO_ACCESS_KEY: ${{ secrets.MINIO_ACCESS_KEY }}
           MINIO_SECRET_KEY: ${{ secrets.MINIO_SECRET_KEY }}
         run: |
+          set -euo pipefail
+
+          : "${MINIO_ENDPOINT:?Repository secret MINIO_ENDPOINT is not configured}"
+          : "${MINIO_BUCKET:?Repository secret MINIO_BUCKET is not configured}"
+          : "${MINIO_ACCESS_KEY:?Repository secret MINIO_ACCESS_KEY is not configured}"
+          : "${MINIO_SECRET_KEY:?Repository secret MINIO_SECRET_KEY is not configured}"
+
+          case "$MINIO_ENDPOINT" in
+            http://*|https://*) ;;
+            *) MINIO_ENDPOINT="https://$MINIO_ENDPOINT" ;;
+          esac
+          MINIO_ENDPOINT="${MINIO_ENDPOINT%/}"
+          if [[ "${MINIO_ENDPOINT#*://}" == */* ]]; then
+            echo "MINIO_ENDPOINT must contain only scheme and host[:port]"
+            exit 1
+          fi
+
           docker run --rm \
             --network host \
             -e MINIO_ENDPOINT="$MINIO_ENDPOINT" \
@@ -239,6 +266,16 @@ jobs:
           : "${MINIO_BUCKET:?Repository secret MINIO_BUCKET is not configured}"
           : "${MINIO_ACCESS_KEY:?Repository secret MINIO_ACCESS_KEY is not configured}"
           : "${MINIO_SECRET_KEY:?Repository secret MINIO_SECRET_KEY is not configured}"
+
+          case "$MINIO_ENDPOINT" in
+            http://*|https://*) ;;
+            *) MINIO_ENDPOINT="https://$MINIO_ENDPOINT" ;;
+          esac
+          MINIO_ENDPOINT="${MINIO_ENDPOINT%/}"
+          if [[ "${MINIO_ENDPOINT#*://}" == */* ]]; then
+            echo "MINIO_ENDPOINT must contain only scheme and host[:port]"
+            exit 1
+          fi
 
           ARTIFACT_KEY="${{ needs.build.outputs.artifact_key }}"
 
