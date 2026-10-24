@@ -12,6 +12,7 @@ import ru.medovik.hack2026.api.dto.settings.FinanceSettings
 import ru.medovik.hack2026.api.dto.settings.ForecastSettings
 import ru.medovik.hack2026.api.dto.settings.ModelSettings
 import ru.medovik.hack2026.api.dto.settings.ModelSettingsValues
+import ru.medovik.hack2026.api.dto.settings.PatchModelSettingsRequest
 import ru.medovik.hack2026.api.dto.settings.RiskThresholds
 import ru.medovik.hack2026.api.dto.settings.SaveModelSettingsRequest
 import ru.medovik.hack2026.api.exception.InvalidModelSettingsException
@@ -87,6 +88,31 @@ class ModelSettingsService(
             }
         })
         return result
+    }
+
+    /**
+     * The row lock covers read, merge and write. Legacy PUT and contract PATCH share
+     * optimistic version checks, validation and database persistence.
+     */
+    @Transactional
+    fun patch(request: PatchModelSettingsRequest, updatedBy: String): ModelSettings {
+        repository.lockForSave()
+        val current = repository.current()
+        if (request.version != current.version) {
+            throw ModelSettingsConflictException(
+                current = response(
+                    version = current.version,
+                    updatedAt = current.updatedAt,
+                    updatedBy = current.updatedBy,
+                    values = current.values,
+                ),
+            )
+        }
+        val merged = request.changes.mergeInto(current.values)
+        return save(
+            request = SaveModelSettingsRequest(version = current.version, values = merged),
+            updatedBy = updatedBy,
+        )
     }
 
     @Transactional(readOnly = true)
