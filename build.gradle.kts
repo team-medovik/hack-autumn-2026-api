@@ -184,9 +184,19 @@ tasks.withType<Test> {
 
 tasks.register<JavaExec>("riskReport") {
     group = "verification"
-    description = "Calculate the original fixture at its reference time and export an explained JSON report"
+    description = "Расчёт риска: -PriskInput=JSON -PriskAt=ISO8601 -PriskOutput=JSON -PriskSettings=JSON"
     dependsOn(tasks.named("testClasses"))
     classpath = sourceSets["test"].runtimeClasspath
     mainClass.set("ru.medovik.hack2026.api.risk.FixtureRiskReportKt")
-    args(layout.buildDirectory.file("reports/risk/fixture-risk.json").get().asFile.absolutePath)
+    systemProperty("stdout.encoding", "UTF-8")
+    systemProperty("stderr.encoding", "UTF-8")
+    val inputPath = providers.gradleProperty("riskInput")
+    val defaultReportName = if (inputPath.isPresent) "custom-risk.json" else "fixture-risk.json"
+    val outputPath = providers.gradleProperty("riskOutput")
+        .map { file(it).absolutePath }
+        .getOrElse(layout.buildDirectory.file("reports/risk/$defaultReportName").get().asFile.absolutePath)
+    args("--output", outputPath)
+    inputPath.orNull?.let { args("--input", file(it).absolutePath) }
+    providers.gradleProperty("riskAt").orNull?.let { args("--at", it) }
+    providers.gradleProperty("riskSettings").orNull?.let { args("--settings", file(it).absolutePath) }
 }
