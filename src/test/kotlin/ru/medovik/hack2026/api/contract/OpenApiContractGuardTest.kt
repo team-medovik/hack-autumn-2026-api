@@ -109,9 +109,15 @@ class OpenApiContractGuardTest {
             assertEquals(false, schema["additionalProperties"], "$name must reject additional fields")
         }
 
-        // The nested patch objects deliberately omit additionalProperties.
-        // In JSON Schema this means unknown nested properties are allowed by default.
-        for (name in listOf("PatchFactorWeights", "PatchRiskThresholds", "PatchFinanceSettings", "PatchForecastSettings")) {
+        // Factor weights have their own explicit additionalProperties schema.
+        val weightSchema = assertNotNull(schemas["PatchFactorWeights"])
+        val extraWeightType = weightSchema["additionalProperties"] as? Map<*, *>
+        assertNotNull(extraWeightType)
+        assertEquals("integer", extraWeightType["type"])
+        assertEquals(0, extraWeightType["minimum"])
+        assertEquals(100, extraWeightType["maximum"])
+
+        for (name in listOf("PatchRiskThresholds", "PatchFinanceSettings", "PatchForecastSettings")) {
             val schema = assertNotNull(schemas[name], "Missing schema $name")
             assertFalse(schema.containsKey("additionalProperties"), "$name must inherit the JSON Schema default")
         }

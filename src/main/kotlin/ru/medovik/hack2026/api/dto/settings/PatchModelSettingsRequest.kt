@@ -16,11 +16,12 @@ data class PatchFactorWeights(
     val awaitingPaymentWithoutFunds: Int? = null,
     val disabledByClient: Int? = null,
     val bonusesExceedMoney: Int? = null,
+    val additionalWeights: Map<String, Int> = emptyMap(),
 ) {
     fun nonEmpty() = listOf(
         awaitingPayment, expiringWithoutAutoRenewal, insufficientFunds,
         awaitingPaymentWithoutFunds, disabledByClient, bonusesExceedMoney,
-    ).any { it != null }
+    ).any { it != null } || additionalWeights.isNotEmpty()
 
     fun apply(old: FactorWeights) = old.copy(
         awaitingPayment = awaitingPayment ?: old.awaitingPayment,
@@ -29,6 +30,7 @@ data class PatchFactorWeights(
         awaitingPaymentWithoutFunds = awaitingPaymentWithoutFunds ?: old.awaitingPaymentWithoutFunds,
         disabledByClient = disabledByClient ?: old.disabledByClient,
         bonusesExceedMoney = bonusesExceedMoney ?: old.bonusesExceedMoney,
+        additionalWeights = (old.additionalWeights + additionalWeights).toMutableMap(),
     )
 }
 
@@ -70,15 +72,10 @@ data class ModelSettingsChanges(
     val forecast: PatchForecastSettings? = null,
 ) {
     fun mergeInto(old: ModelSettingsValues): ModelSettingsValues {
-        val states = listOf(
-            factorWeights?.nonEmpty(), riskThresholds?.nonEmpty(), finance?.nonEmpty(), forecast?.nonEmpty(),
-        )
-        if (states.none { it == true }) {
-            throw InvalidModelSettingsException("changes должен содержать хотя бы одно изменяемое поле")
+        if (factorWeights == null && riskThresholds == null && finance == null && forecast == null) {
+            throw InvalidModelSettingsException("changes должен содержать хотя бы одну группу")
         }
-        if (states.any { it == false }) {
-            throw InvalidModelSettingsException("Группы изменений не должны быть пустыми")
-        }
+        // Controllers enforce minProperties. Extra JSON keys in non-weight groups are permitted by OpenAPI.
         return old.copy(
             factorWeights = factorWeights?.apply(old.factorWeights) ?: old.factorWeights,
             riskThresholds = riskThresholds?.apply(old.riskThresholds) ?: old.riskThresholds,

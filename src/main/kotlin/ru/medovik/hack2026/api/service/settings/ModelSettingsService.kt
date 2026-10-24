@@ -160,7 +160,7 @@ class ModelSettingsService(
             weights.disabledByClient,
             weights.bonusesExceedMoney,
         )
-        if (allWeights.any { it !in 0..100 }) throw InvalidModelSettingsException("Веса должны быть от 0 до 100")
+        if ((allWeights + weights.additionalWeights.values).any { it !in 0..100 }) throw InvalidModelSettingsException("Веса должны быть от 0 до 100")
         val thresholds = values.riskThresholds
         if (thresholds.medium !in 1..100 || thresholds.high !in 1..100 || thresholds.high <= thresholds.medium) {
             throw InvalidModelSettingsException("Пороги должны удовлетворять 0 < medium < high <= 100")
@@ -185,7 +185,7 @@ class ModelSettingsService(
             "F4" to values.factorWeights.awaitingPaymentWithoutFunds.toDouble(),
             "F5" to values.factorWeights.disabledByClient.toDouble(),
             "F6" to values.factorWeights.bonusesExceedMoney.toDouble(),
-        ),
+        ) + values.factorWeights.additionalWeights.mapValues { it.value.toDouble() },
         mediumThreshold = values.riskThresholds.medium.toDouble(),
         highThreshold = values.riskThresholds.high.toDouble(),
         bonusesAsMoney = values.finance.bonusesAsMoney,

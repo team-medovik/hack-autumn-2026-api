@@ -26,8 +26,8 @@ class ContractModelSettingsController(
     fun get(): ModelSettings = service.get()
 
     /**
-     * Do not silently drop unknown JSON keys: the unified OpenAPI schema explicitly forbids
-     * additionalProperties on the request and each patch group.
+     * OpenAPI forbids unknown top-level keys, but permits additional nested keys.
+     * Newly registered factor weights must be integer values in 0..100.
      */
     @PatchMapping("/api/v1/model/settings")
     @Operation(operationId = "patchRiskModelSettings", summary = "Частично обновить параметры модели и пересчитать")
@@ -36,8 +36,24 @@ class ContractModelSettingsController(
         authentication: Authentication,
     ): ModelSettings {
         validatePatchPayload(payload)
+        val changes = requireMap(payload["changes"], "changes")
+        val weights = changes["factorWeights"]?.let { requireMap(it, "factorWeights") }
+        val extraWeights = weights.orEmpty()
+            .filterKeys { it !in ru.medovik.hack2026.api.dto.settings.FactorWeights.BUILTIN_KEYS }
+            .mapValues { (_, weight) -> (weight as Number).toInt() }
+        // Unknown factor keys are carried into FactorWeights.additionalWeights, not discarded.
+        val normalized = changes.toMutableMap()
+        if (weights != null) normalized["factorWeights"] = weights.filterKeys {
+            it in ru.medovik.hack2026.api.dto.settings.FactorWeights.BUILTIN_KEYS
+        }
         val request = try {
-            jsonMapper.readValue(jsonMapper.writeValueAsString(payload), PatchModelSettingsRequest::class.java)
+            val parsed = jsonMapper.readValue(
+                jsonMapper.writeValueAsString(payload + ("changes" to normalized)),
+                PatchModelSettingsRequest::class.java,
+            )
+            parsed.copy(changes = parsed.changes.copy(
+                factorWeights = parsed.changes.factorWeights?.copy(additionalWeights = extraWeights),
+            ))
         } catch (_: Exception) {
             throw InvalidModelSettingsException("Не удалось разобрать изменения модели")
         }
@@ -56,9 +72,15 @@ class ContractModelSettingsController(
         for ((group, allowed) in GROUP_FIELDS) {
             if (!changes.containsKey(group)) continue
             val fields = requireMap(changes[group], group)
-            requireKeys(fields, allowed, group)
             if (fields.isEmpty()) throw InvalidModelSettingsException("$group не может быть пустым")
             for ((name, value) in fields) {
+                if (group == "factorWeights") {
+                    if ((value !is Int && value !is Long) || (value as Number).toLong() !in 0L..100L) {
+                        throw InvalidModelSettingsException("$group.$name должен быть целым числом от 0 до 100")
+                    }
+                    continue
+                }
+                if (name !in allowed) continue // Other nested groups permit additionalProperties.
                 if (value == null) throw InvalidModelSettingsException("$group.$name не может быть null")
                 if (name in BOOLEAN_FIELDS) {
                     if (value !is Boolean) throw InvalidModelSettingsException("$group.$name должен быть boolean")
