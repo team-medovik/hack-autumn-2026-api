@@ -8,9 +8,16 @@ services:
     container_name: hack-autumn-2026-api
     env_file:
       - ./.env
+    group_add:
+      - "0"
     volumes:
       - /home/kinoko/logs/teamup/hack-autumn-2026-api:/logs
-      - ./runtime:/config:ro
+      - type: bind
+        source: ${USERS_ENV_DIR:-./runtime}
+        target: /config
+        read_only: true
+        bind:
+          create_host_path: false
     networks:
       - backend
     ports:

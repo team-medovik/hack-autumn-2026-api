@@ -16,6 +16,8 @@ env:
 
   TARGET_DIR: '/home/kinoko/hack-autumn-2026/api'
 
+  USERS_ENV_DIR: '/home/kinoko/hack-autumn-2026/runtime'
+
   JAR_DIR: '/tmp/hack-autumn-2026-api'
 
   # ===== Build =====
@@ -322,10 +324,30 @@ jobs:
           echo "Downloaded JARs:"
           ls -lah unpacked
 
+      - name: Check persistent users file
+        run: |
+          set -euo pipefail
+
+          if ! sudo test -f "$USERS_ENV_DIR/users.env" && sudo test -f "$TARGET_DIR/runtime/users.env"; then
+            sudo install -d -o root -g root -m 750 "$USERS_ENV_DIR"
+            sudo install -o root -g root -m 640 \
+              "$TARGET_DIR/runtime/users.env" \
+              "$USERS_ENV_DIR/users.env"
+          fi
+
+          if ! sudo test -s "$USERS_ENV_DIR/users.env"; then
+            echo "Missing or empty persistent users file: $USERS_ENV_DIR/users.env" >&2
+            exit 1
+          fi
+
+          sudo chgrp 0 "$USERS_ENV_DIR" "$USERS_ENV_DIR/users.env"
+          sudo chmod 750 "$USERS_ENV_DIR"
+          sudo chmod 640 "$USERS_ENV_DIR/users.env"
+
       - name: Stop and remove existing containers
         run: |
           if [ -f "$TARGET_DIR/docker-compose.yml" ]; then
-            sudo docker compose -f "$TARGET_DIR/docker-compose.yml" down
+            sudo docker compose --env-file "$TARGET_DIR/.env" -f "$TARGET_DIR/docker-compose.yml" down
           fi
 
       - name: Clean target directory
@@ -355,6 +377,8 @@ jobs:
           sed -i 's/\r$//' "$ENV_FILE"
           sed -i '/^SPRING_PROFILES_ACTIVE=/d' "$ENV_FILE"
           printf '\nSPRING_PROFILES_ACTIVE=prod\n' >> "$ENV_FILE"
+          sed -i '/^USERS_ENV_DIR=/d' "$ENV_FILE"
+          printf 'USERS_ENV_DIR=%s\n' "$USERS_ENV_DIR" >> "$ENV_FILE"
 
           for variable in \
             SPRING_DATASOURCE_URL \
@@ -390,16 +414,16 @@ jobs:
       - name: Build and deploy with Docker Compose
         run: |
           if [ -f "$TARGET_DIR/docker-compose.yml" ]; then
-            sudo docker compose -f "$TARGET_DIR/docker-compose.yml" rm -f
+            sudo docker compose --env-file "$TARGET_DIR/.env" -f "$TARGET_DIR/docker-compose.yml" rm -f
           fi
 
-          sudo docker compose -f "$TARGET_DIR/docker-compose.yml" up --build -d
+          sudo docker compose --env-file "$TARGET_DIR/.env" -f "$TARGET_DIR/docker-compose.yml" up --build -d
 
           sleep 60
 
-          if sudo docker compose -f "$TARGET_DIR/docker-compose.yml" logs | grep -i "\[ERROR\]"; then
+          if sudo docker compose --env-file "$TARGET_DIR/.env" -f "$TARGET_DIR/docker-compose.yml" logs | grep -i "\[ERROR\]"; then
             echo "Ошибка деплоя. В логах найдены ошибки"
-            sudo docker compose -f "$TARGET_DIR/docker-compose.yml" logs | grep -i "\[ERROR\]"
+            sudo docker compose --env-file "$TARGET_DIR/.env" -f "$TARGET_DIR/docker-compose.yml" logs | grep -i "\[ERROR\]"
             exit 1
           else
             echo "Ошибок в логах не найдено. Деплой успешен"
