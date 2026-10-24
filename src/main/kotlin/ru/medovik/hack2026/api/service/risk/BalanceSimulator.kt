@@ -11,7 +11,7 @@ class BalanceSimulator {
     /**
      * The F1..F5 specification includes ALL live renewals within the horizon,
      * regardless of autoProlong. Each service contributes one renewal price.
-     * Chronological coverage is explanatory; F2/F4 use the shared shortage ratio.
+     * F2/F4 use each renewal's shortage after earlier fully covered renewals.
      */
     fun calculate(account: Account, services: List<Service>, horizonEnd: Instant): FundingSummary {
         require(services.all { it.ownerId == account.id }) { "Services belong to another account" }

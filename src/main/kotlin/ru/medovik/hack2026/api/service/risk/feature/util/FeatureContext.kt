@@ -19,6 +19,8 @@ data class FeatureContext(
 
     val inHorizon: Boolean = daysToExpiry <= settings.horizonDays
 
+    val renewalCoverage = funding.renewals.find { it.serviceId == service.id }
+
     private companion object {
         const val NANOSECONDS_PER_SECOND = 1_000_000_000.0
         const val SECONDS_PER_DAY = 86_400.0

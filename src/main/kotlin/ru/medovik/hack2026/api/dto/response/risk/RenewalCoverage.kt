@@ -9,4 +9,7 @@ data class RenewalCoverage(
     val fundsBefore: Long,
     val covered: Boolean,
     val fundsAfter: Long,
-)
+) {
+    val shortfall: Long get() = (price - fundsBefore).coerceAtLeast(0L)
+    val shortageStrength: Double get() = if (price == 0L) 0.0 else shortfall.toDouble() / price.toDouble()
+}

@@ -10,11 +10,12 @@ class InsufficientFunds : RiskFeature {
 
     override fun evaluate(context: FeatureContext): FeatureEvaluation = with(context) {
         if (!service.status.isLive || !inHorizon) return FeatureEvaluation.notApplicable()
+        val renewal = renewalCoverage ?: return FeatureEvaluation.notApplicable()
         FeatureEvaluation(
             applicable = true,
-            strength = funding.shortageStrength,
-            explanation = "Доступно ${funding.availableFunds} евроцентов; на продления в горизонте " +
-                    "${settings.horizonDays} дн. нужно ${funding.requiredFunds} евроцентов",
+            strength = renewal.shortageStrength,
+            explanation = "Перед продлением услуги ${service.name} доступно ${renewal.fundsBefore} евроцентов; " +
+                    "цена продления ${renewal.price}, не хватает ${renewal.shortfall} евроцентов",
             evidence = fundingEvidence(context),
         )
     }

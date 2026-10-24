@@ -8,5 +8,5 @@ data class RiskResult(
     val settings: RiskSettings,
     val services: List<ServiceRiskResult>,
     val customers: List<CustomerRiskResult>,
-    val modelVersion: String = "expert-f1-f5-v1",
+    val modelVersion: String = "expert-f1-f5-v2",
 )

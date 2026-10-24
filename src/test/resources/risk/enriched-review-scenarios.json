@@ -1,0 +1,809 @@
+{
+  "accounts": [
+    {
+      "id": 1001,
+      "email": "empty@example.test",
+      "balance": 0,
+      "withdrawBalance": 0,
+      "totalReplenished": 5000,
+      "bonusBalance": 0,
+      "bonusState": "locked"
+    },
+    {
+      "id": 1002,
+      "email": "deleted-only@example.test",
+      "balance": 1000,
+      "withdrawBalance": 0,
+      "totalReplenished": 5000,
+      "bonusBalance": 0,
+      "bonusState": "locked"
+    },
+    {
+      "id": 1003,
+      "email": "blocked-only@example.test",
+      "balance": 1000,
+      "withdrawBalance": 0,
+      "totalReplenished": 5000,
+      "bonusBalance": 0,
+      "bonusState": "locked"
+    },
+    {
+      "id": 1004,
+      "email": "blocked-and-deleted@example.test",
+      "balance": 1000,
+      "withdrawBalance": 0,
+      "totalReplenished": 5000,
+      "bonusBalance": 0,
+      "bonusState": "locked"
+    },
+    {
+      "id": 1005,
+      "email": "mixed-with-live@example.test",
+      "balance": 1000,
+      "withdrawBalance": 0,
+      "totalReplenished": 5000,
+      "bonusBalance": 0,
+      "bonusState": "locked"
+    },
+    {
+      "id": 1006,
+      "email": "active-funded@example.test",
+      "balance": 800,
+      "withdrawBalance": 0,
+      "totalReplenished": 5000,
+      "bonusBalance": 0,
+      "bonusState": "locked"
+    },
+    {
+      "id": 1007,
+      "email": "suspended-funded@example.test",
+      "balance": 800,
+      "withdrawBalance": 0,
+      "totalReplenished": 5000,
+      "bonusBalance": 0,
+      "bonusState": "locked"
+    },
+    {
+      "id": 1008,
+      "email": "active-empty@example.test",
+      "balance": 0,
+      "withdrawBalance": 0,
+      "totalReplenished": 5000,
+      "bonusBalance": 0,
+      "bonusState": "locked"
+    },
+    {
+      "id": 1009,
+      "email": "active-partial@example.test",
+      "balance": 200,
+      "withdrawBalance": 0,
+      "totalReplenished": 5000,
+      "bonusBalance": 0,
+      "bonusState": "locked"
+    },
+    {
+      "id": 1010,
+      "email": "bonus-locked@example.test",
+      "balance": 0,
+      "withdrawBalance": 0,
+      "totalReplenished": 5000,
+      "bonusBalance": 800,
+      "bonusState": "locked"
+    },
+    {
+      "id": 1011,
+      "email": "bonus-unlocked@example.test",
+      "balance": 0,
+      "withdrawBalance": 0,
+      "totalReplenished": 5000,
+      "bonusBalance": 800,
+      "bonusState": "unlocked"
+    },
+    {
+      "id": 1012,
+      "email": "withdraw-only@example.test",
+      "balance": 0,
+      "withdrawBalance": 800,
+      "totalReplenished": 5000,
+      "bonusBalance": 0,
+      "bonusState": "locked"
+    },
+    {
+      "id": 1013,
+      "email": "expiry-now@example.test",
+      "balance": 800,
+      "withdrawBalance": 0,
+      "totalReplenished": 5000,
+      "bonusBalance": 0,
+      "bonusState": "locked"
+    },
+    {
+      "id": 1014,
+      "email": "horizon-edge@example.test",
+      "balance": 0,
+      "withdrawBalance": 0,
+      "totalReplenished": 5000,
+      "bonusBalance": 0,
+      "bonusState": "locked"
+    },
+    {
+      "id": 1015,
+      "email": "grace-edge@example.test",
+      "balance": 3000,
+      "withdrawBalance": 0,
+      "totalReplenished": 5000,
+      "bonusBalance": 0,
+      "bonusState": "locked"
+    },
+    {
+      "id": 1016,
+      "email": "waiting-empty@example.test",
+      "balance": 0,
+      "withdrawBalance": 0,
+      "totalReplenished": 5000,
+      "bonusBalance": 0,
+      "bonusState": "locked"
+    },
+    {
+      "id": 1017,
+      "email": "waiting-funded@example.test",
+      "balance": 800,
+      "withdrawBalance": 0,
+      "totalReplenished": 5000,
+      "bonusBalance": 0,
+      "bonusState": "locked"
+    },
+    {
+      "id": 1018,
+      "email": "same-expiry-order@example.test",
+      "balance": 800,
+      "withdrawBalance": 0,
+      "totalReplenished": 5000,
+      "bonusBalance": 0,
+      "bonusState": "locked"
+    },
+    {
+      "id": 1019,
+      "email": "failed-then-small@example.test",
+      "balance": 300,
+      "withdrawBalance": 0,
+      "totalReplenished": 5000,
+      "bonusBalance": 0,
+      "bonusState": "locked"
+    },
+    {
+      "id": 1020,
+      "email": "payment-periods@example.test",
+      "balance": 100000,
+      "withdrawBalance": 0,
+      "totalReplenished": 500000,
+      "bonusBalance": 0,
+      "bonusState": "locked"
+    },
+    {
+      "id": 1021,
+      "email": "sort-z-cheap-urgent@example.test",
+      "balance": 1000,
+      "withdrawBalance": 0,
+      "totalReplenished": 200000,
+      "bonusBalance": 0,
+      "bonusState": "locked"
+    },
+    {
+      "id": 1022,
+      "email": "sort-m-expensive-later@example.test",
+      "balance": 10000,
+      "withdrawBalance": 0,
+      "totalReplenished": 20000,
+      "bonusBalance": 0,
+      "bonusState": "locked"
+    },
+    {
+      "id": 1023,
+      "email": "sort-a-cheap-urgent@example.test",
+      "balance": 1000,
+      "withdrawBalance": 0,
+      "totalReplenished": 200000,
+      "bonusBalance": 0,
+      "bonusState": "locked"
+    },
+    {
+      "id": 1024,
+      "email": "quality-dates@example.test",
+      "balance": 3000,
+      "withdrawBalance": 0,
+      "totalReplenished": 5000,
+      "bonusBalance": 0,
+      "bonusState": "locked"
+    },
+    {
+      "id": 1025,
+      "email": "auto-renewal-pair@example.test",
+      "balance": 500,
+      "withdrawBalance": 0,
+      "totalReplenished": 5000,
+      "bonusBalance": 0,
+      "bonusState": "locked"
+    },
+    {
+      "id": 1026,
+      "email": "waiting-balance-600@example.test",
+      "balance": 600,
+      "withdrawBalance": 0,
+      "totalReplenished": 5000,
+      "bonusBalance": 0,
+      "bonusState": "locked"
+    },
+    {
+      "id": 1027,
+      "email": "waiting-balance-400@example.test",
+      "balance": 400,
+      "withdrawBalance": 0,
+      "totalReplenished": 5000,
+      "bonusBalance": 0,
+      "bonusState": "locked"
+    },
+    {
+      "id": 1028,
+      "email": "waiting-balance-200@example.test",
+      "balance": 200,
+      "withdrawBalance": 0,
+      "totalReplenished": 5000,
+      "bonusBalance": 0,
+      "bonusState": "locked"
+    }
+  ],
+  "services": [
+    {
+      "id": 2002,
+      "name": "deleted-only",
+      "ownerId": 1002,
+      "paymentTerm": "month",
+      "autoProlong": true,
+      "createdAt": "2026-09-01T15:00:00Z",
+      "expiresAt": "2026-10-20T15:00:00Z",
+      "status": "deleted",
+      "price": 800
+    },
+    {
+      "id": 2003,
+      "name": "blocked-only",
+      "ownerId": 1003,
+      "paymentTerm": "month",
+      "autoProlong": true,
+      "createdAt": "2026-09-01T15:00:00Z",
+      "expiresAt": "2026-10-20T15:00:00Z",
+      "status": "blocked",
+      "price": 800
+    },
+    {
+      "id": 2004,
+      "name": "mixed-blocked",
+      "ownerId": 1004,
+      "paymentTerm": "month",
+      "autoProlong": true,
+      "createdAt": "2026-09-01T15:00:00Z",
+      "expiresAt": "2026-10-20T15:00:00Z",
+      "status": "blocked",
+      "price": 800
+    },
+    {
+      "id": 2005,
+      "name": "mixed-deleted",
+      "ownerId": 1004,
+      "paymentTerm": "month",
+      "autoProlong": true,
+      "createdAt": "2026-09-01T15:00:00Z",
+      "expiresAt": "2026-10-20T15:00:00Z",
+      "status": "deleted",
+      "price": 800
+    },
+    {
+      "id": 2006,
+      "name": "mixed-live",
+      "ownerId": 1005,
+      "paymentTerm": "month",
+      "autoProlong": true,
+      "createdAt": "2026-09-01T15:00:00Z",
+      "expiresAt": "2026-10-20T15:00:00Z",
+      "status": "active",
+      "price": 800
+    },
+    {
+      "id": 2007,
+      "name": "mixed-inactive-blocked",
+      "ownerId": 1005,
+      "paymentTerm": "month",
+      "autoProlong": true,
+      "createdAt": "2026-09-01T15:00:00Z",
+      "expiresAt": "2026-10-20T15:00:00Z",
+      "status": "blocked",
+      "price": 10000
+    },
+    {
+      "id": 2008,
+      "name": "mixed-inactive-deleted",
+      "ownerId": 1005,
+      "paymentTerm": "month",
+      "autoProlong": true,
+      "createdAt": "2026-09-01T15:00:00Z",
+      "expiresAt": "2026-10-20T15:00:00Z",
+      "status": "deleted",
+      "price": 20000
+    },
+    {
+      "id": 2009,
+      "name": "active-funded",
+      "ownerId": 1006,
+      "paymentTerm": "month",
+      "autoProlong": true,
+      "createdAt": "2026-09-01T15:00:00Z",
+      "expiresAt": "2026-10-20T15:00:00Z",
+      "status": "active",
+      "price": 800
+    },
+    {
+      "id": 2010,
+      "name": "suspended-funded",
+      "ownerId": 1007,
+      "paymentTerm": "month",
+      "autoProlong": true,
+      "createdAt": "2026-09-01T15:00:00Z",
+      "expiresAt": "2026-10-20T15:00:00Z",
+      "status": "suspended",
+      "price": 800
+    },
+    {
+      "id": 2011,
+      "name": "active-empty",
+      "ownerId": 1008,
+      "paymentTerm": "month",
+      "autoProlong": true,
+      "createdAt": "2026-09-01T15:00:00Z",
+      "expiresAt": "2026-10-20T15:00:00Z",
+      "status": "active",
+      "price": 800
+    },
+    {
+      "id": 2012,
+      "name": "active-partial",
+      "ownerId": 1009,
+      "paymentTerm": "month",
+      "autoProlong": true,
+      "createdAt": "2026-09-01T15:00:00Z",
+      "expiresAt": "2026-10-20T15:00:00Z",
+      "status": "active",
+      "price": 800
+    },
+    {
+      "id": 2013,
+      "name": "bonus-locked",
+      "ownerId": 1010,
+      "paymentTerm": "month",
+      "autoProlong": true,
+      "createdAt": "2026-09-01T15:00:00Z",
+      "expiresAt": "2026-10-20T15:00:00Z",
+      "status": "active",
+      "price": 800
+    },
+    {
+      "id": 2014,
+      "name": "bonus-unlocked",
+      "ownerId": 1011,
+      "paymentTerm": "month",
+      "autoProlong": true,
+      "createdAt": "2026-09-01T15:00:00Z",
+      "expiresAt": "2026-10-20T15:00:00Z",
+      "status": "active",
+      "price": 800
+    },
+    {
+      "id": 2015,
+      "name": "withdraw-only",
+      "ownerId": 1012,
+      "paymentTerm": "month",
+      "autoProlong": true,
+      "createdAt": "2026-09-01T15:00:00Z",
+      "expiresAt": "2026-10-20T15:00:00Z",
+      "status": "active",
+      "price": 800
+    },
+    {
+      "id": 2016,
+      "name": "expiry-now",
+      "ownerId": 1013,
+      "paymentTerm": "month",
+      "autoProlong": false,
+      "createdAt": "2026-09-01T15:00:00Z",
+      "expiresAt": "2026-10-19T15:00:00Z",
+      "status": "active",
+      "price": 800
+    },
+    {
+      "id": 2017,
+      "name": "one-second-before-horizon",
+      "ownerId": 1014,
+      "paymentTerm": "month",
+      "autoProlong": false,
+      "createdAt": "2026-09-01T15:00:00Z",
+      "expiresAt": "2026-10-26T14:59:59Z",
+      "status": "active",
+      "price": 800
+    },
+    {
+      "id": 2018,
+      "name": "exactly-at-horizon",
+      "ownerId": 1014,
+      "paymentTerm": "month",
+      "autoProlong": false,
+      "createdAt": "2026-09-01T15:00:00Z",
+      "expiresAt": "2026-10-26T15:00:00Z",
+      "status": "active",
+      "price": 800
+    },
+    {
+      "id": 2019,
+      "name": "one-second-after-horizon",
+      "ownerId": 1014,
+      "paymentTerm": "month",
+      "autoProlong": false,
+      "createdAt": "2026-09-01T15:00:00Z",
+      "expiresAt": "2026-10-26T15:00:01Z",
+      "status": "active",
+      "price": 800
+    },
+    {
+      "id": 2020,
+      "name": "one-second-before-grace-end",
+      "ownerId": 1015,
+      "paymentTerm": "month",
+      "autoProlong": true,
+      "createdAt": "2026-09-01T15:00:00Z",
+      "expiresAt": "2026-10-14T15:00:01Z",
+      "status": "prolong_wait",
+      "price": 800
+    },
+    {
+      "id": 2021,
+      "name": "exactly-at-grace-end",
+      "ownerId": 1015,
+      "paymentTerm": "month",
+      "autoProlong": true,
+      "createdAt": "2026-09-01T15:00:00Z",
+      "expiresAt": "2026-10-14T15:00:00Z",
+      "status": "prolong_wait",
+      "price": 800
+    },
+    {
+      "id": 2022,
+      "name": "one-second-after-grace-end",
+      "ownerId": 1015,
+      "paymentTerm": "month",
+      "autoProlong": true,
+      "createdAt": "2026-09-01T15:00:00Z",
+      "expiresAt": "2026-10-14T14:59:59Z",
+      "status": "prolong_wait",
+      "price": 800
+    },
+    {
+      "id": 2023,
+      "name": "waiting-empty",
+      "ownerId": 1016,
+      "paymentTerm": "month",
+      "autoProlong": true,
+      "createdAt": "2026-09-01T15:00:00Z",
+      "expiresAt": "2026-10-18T15:00:00Z",
+      "status": "prolong_wait",
+      "price": 800
+    },
+    {
+      "id": 2024,
+      "name": "waiting-funded",
+      "ownerId": 1017,
+      "paymentTerm": "month",
+      "autoProlong": true,
+      "createdAt": "2026-09-01T15:00:00Z",
+      "expiresAt": "2026-10-18T15:00:00Z",
+      "status": "prolong_wait",
+      "price": 800
+    },
+    {
+      "id": 2026,
+      "name": "same-expiry-higher-id",
+      "ownerId": 1018,
+      "paymentTerm": "month",
+      "autoProlong": true,
+      "createdAt": "2026-09-01T15:00:00Z",
+      "expiresAt": "2026-10-20T15:00:00Z",
+      "status": "active",
+      "price": 800
+    },
+    {
+      "id": 2025,
+      "name": "same-expiry-lower-id",
+      "ownerId": 1018,
+      "paymentTerm": "month",
+      "autoProlong": true,
+      "createdAt": "2026-09-01T15:00:00Z",
+      "expiresAt": "2026-10-20T15:00:00Z",
+      "status": "active",
+      "price": 800
+    },
+    {
+      "id": 2027,
+      "name": "unaffordable-first",
+      "ownerId": 1019,
+      "paymentTerm": "month",
+      "autoProlong": true,
+      "createdAt": "2026-09-01T15:00:00Z",
+      "expiresAt": "2026-10-20T15:00:00Z",
+      "status": "active",
+      "price": 900
+    },
+    {
+      "id": 2028,
+      "name": "affordable-second",
+      "ownerId": 1019,
+      "paymentTerm": "month",
+      "autoProlong": true,
+      "createdAt": "2026-09-01T15:00:00Z",
+      "expiresAt": "2026-10-21T15:00:00Z",
+      "status": "active",
+      "price": 300
+    },
+    {
+      "id": 2029,
+      "name": "free-third",
+      "ownerId": 1019,
+      "paymentTerm": "month",
+      "autoProlong": true,
+      "createdAt": "2026-09-01T15:00:00Z",
+      "expiresAt": "2026-10-22T15:00:00Z",
+      "status": "active",
+      "price": 0
+    },
+    {
+      "id": 2030,
+      "name": "hourly",
+      "ownerId": 1020,
+      "paymentTerm": "hour",
+      "autoProlong": false,
+      "createdAt": "2026-10-19T15:00:00Z",
+      "expiresAt": "2026-10-19T16:00:00Z",
+      "status": "active",
+      "price": 10
+    },
+    {
+      "id": 2031,
+      "name": "weekly",
+      "ownerId": 1020,
+      "paymentTerm": "week",
+      "autoProlong": false,
+      "createdAt": "2026-10-13T15:00:00Z",
+      "expiresAt": "2026-10-20T15:00:00Z",
+      "status": "active",
+      "price": 700
+    },
+    {
+      "id": 2032,
+      "name": "monthly",
+      "ownerId": 1020,
+      "paymentTerm": "month",
+      "autoProlong": false,
+      "createdAt": "2026-09-20T15:00:00Z",
+      "expiresAt": "2026-10-20T15:00:00Z",
+      "status": "active",
+      "price": 3000
+    },
+    {
+      "id": 2033,
+      "name": "quarterly",
+      "ownerId": 1020,
+      "paymentTerm": "quarter_year",
+      "autoProlong": false,
+      "createdAt": "2026-07-20T15:00:00Z",
+      "expiresAt": "2026-10-20T15:00:00Z",
+      "status": "active",
+      "price": 9000
+    },
+    {
+      "id": 2034,
+      "name": "half-yearly",
+      "ownerId": 1020,
+      "paymentTerm": "half_year",
+      "autoProlong": false,
+      "createdAt": "2026-04-20T15:00:00Z",
+      "expiresAt": "2026-10-20T15:00:00Z",
+      "status": "active",
+      "price": 18000
+    },
+    {
+      "id": 2035,
+      "name": "yearly",
+      "ownerId": 1020,
+      "paymentTerm": "year",
+      "autoProlong": false,
+      "createdAt": "2025-10-20T15:00:00Z",
+      "expiresAt": "2026-10-20T15:00:00Z",
+      "status": "active",
+      "price": 36000
+    },
+    {
+      "id": 2036,
+      "name": "cheap-urgent",
+      "ownerId": 1021,
+      "paymentTerm": "month",
+      "autoProlong": false,
+      "createdAt": "2026-09-01T15:00:00Z",
+      "expiresAt": "2026-10-19T16:00:00Z",
+      "status": "active",
+      "price": 100
+    },
+    {
+      "id": 2037,
+      "name": "expensive-later",
+      "ownerId": 1022,
+      "paymentTerm": "month",
+      "autoProlong": false,
+      "createdAt": "2026-09-01T15:00:00Z",
+      "expiresAt": "2026-10-22T15:00:00Z",
+      "status": "active",
+      "price": 10000
+    },
+    {
+      "id": 2038,
+      "name": "cheap-urgent-tie",
+      "ownerId": 1023,
+      "paymentTerm": "month",
+      "autoProlong": false,
+      "createdAt": "2026-09-01T15:00:00Z",
+      "expiresAt": "2026-10-19T16:00:00Z",
+      "status": "active",
+      "price": 100
+    },
+    {
+      "id": 2039,
+      "name": "created-in-future",
+      "ownerId": 1024,
+      "paymentTerm": "month",
+      "autoProlong": true,
+      "createdAt": "2026-10-20T15:00:00Z",
+      "expiresAt": "2026-11-20T15:00:00Z",
+      "status": "active",
+      "price": 800
+    },
+    {
+      "id": 2040,
+      "name": "expired-active",
+      "ownerId": 1024,
+      "paymentTerm": "month",
+      "autoProlong": true,
+      "createdAt": "2026-09-01T15:00:00Z",
+      "expiresAt": "2026-10-19T14:59:59Z",
+      "status": "active",
+      "price": 800
+    },
+    {
+      "id": 2041,
+      "name": "waiting-before-expiry",
+      "ownerId": 1024,
+      "paymentTerm": "month",
+      "autoProlong": true,
+      "createdAt": "2026-09-01T15:00:00Z",
+      "expiresAt": "2026-10-20T15:00:00Z",
+      "status": "prolong_wait",
+      "price": 800
+    },
+    {
+      "id": 2042,
+      "name": "manual-renewal-first",
+      "ownerId": 1025,
+      "paymentTerm": "month",
+      "autoProlong": false,
+      "createdAt": "2026-09-01T15:00:00Z",
+      "expiresAt": "2026-10-21T15:00:00Z",
+      "status": "active",
+      "price": 500
+    },
+    {
+      "id": 2043,
+      "name": "auto-renewal-second",
+      "ownerId": 1025,
+      "paymentTerm": "month",
+      "autoProlong": true,
+      "createdAt": "2026-09-01T15:00:00Z",
+      "expiresAt": "2026-10-21T15:00:00Z",
+      "status": "active",
+      "price": 500
+    },
+    {
+      "id": 2044,
+      "name": "waiting-balance-600",
+      "ownerId": 1026,
+      "paymentTerm": "month",
+      "autoProlong": true,
+      "createdAt": "2026-09-01T15:00:00Z",
+      "expiresAt": "2026-10-18T15:00:00Z",
+      "status": "prolong_wait",
+      "price": 800
+    },
+    {
+      "id": 2045,
+      "name": "waiting-balance-400",
+      "ownerId": 1027,
+      "paymentTerm": "month",
+      "autoProlong": true,
+      "createdAt": "2026-09-01T15:00:00Z",
+      "expiresAt": "2026-10-18T15:00:00Z",
+      "status": "prolong_wait",
+      "price": 800
+    },
+    {
+      "id": 2046,
+      "name": "waiting-balance-200",
+      "ownerId": 1028,
+      "paymentTerm": "month",
+      "autoProlong": true,
+      "createdAt": "2026-09-01T15:00:00Z",
+      "expiresAt": "2026-10-18T15:00:00Z",
+      "status": "prolong_wait",
+      "price": 800
+    }
+  ],
+  "transactions": [
+    {
+      "id": 3001,
+      "amount": 800,
+      "status": "performed",
+      "performedAt": "2026-09-01T15:01:00Z",
+      "createdAt": "2026-09-01T15:00:00Z",
+      "type": "order",
+      "serviceId": 2009
+    },
+    {
+      "id": 3002,
+      "amount": 800,
+      "status": "not_performed",
+      "performedAt": null,
+      "createdAt": "2026-10-18T15:00:00Z",
+      "type": "prolong",
+      "serviceId": 2023
+    },
+    {
+      "id": 3003,
+      "amount": 800,
+      "status": "not_performed",
+      "performedAt": null,
+      "createdAt": "2026-10-18T15:00:00Z",
+      "type": "prolong",
+      "serviceId": 2024
+    },
+    {
+      "id": 3004,
+      "amount": 900,
+      "status": "not_performed",
+      "performedAt": null,
+      "createdAt": "2026-10-19T14:50:00Z",
+      "type": "order",
+      "serviceId": 2027
+    },
+    {
+      "id": 3005,
+      "amount": 0,
+      "status": "performed",
+      "performedAt": "2026-09-01T15:00:00Z",
+      "createdAt": "2026-09-01T15:00:00Z",
+      "type": "order",
+      "serviceId": 2029
+    },
+    {
+      "id": 3006,
+      "amount": 1000,
+      "status": "performed",
+      "performedAt": "2026-09-01T15:01:00Z",
+      "createdAt": "2026-09-01T15:00:00Z",
+      "type": "order",
+      "serviceId": 2006
+    }
+  ]
+}

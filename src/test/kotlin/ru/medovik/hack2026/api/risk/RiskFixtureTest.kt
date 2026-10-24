@@ -30,8 +30,8 @@ class RiskFixtureTest {
     @Test
     fun `additional scenarios are valid input for the risk engine`() {
         val snapshot = mapper.readValue<RiskSnapshot>(fixture("extended-scenarios.json"))
-        assertEquals(10, snapshot.accounts.size)
-        assertEquals(11, snapshot.services.size)
+        assertEquals(13, snapshot.accounts.size)
+        assertEquals(18, snapshot.services.size)
         assertEquals(2, snapshot.transactions.size)
 
         val accountIds = snapshot.accounts.map { it.id }.toSet()
