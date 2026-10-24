@@ -67,6 +67,10 @@ dependencies {
     // Prometheus
     implementation("org.springframework.boot:spring-boot-starter-actuator")
     runtimeOnly("io.micrometer:micrometer-registry-prometheus")
+
+    // Risk engine tests run without Spring or PostgreSQL.
+    testImplementation(kotlin("test-junit5"))
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
 configurations {
@@ -176,4 +180,13 @@ tasks.withType<BootJar> {
 
 tasks.withType<Test> {
     useJUnitPlatform()
+}
+
+tasks.register<JavaExec>("riskReport") {
+    group = "verification"
+    description = "Calculate the original fixture at its reference time and export an explained JSON report"
+    dependsOn(tasks.named("testClasses"))
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("ru.medovik.hack2026.api.risk.FixtureRiskReportKt")
+    args(layout.buildDirectory.file("reports/risk/fixture-risk.json").get().asFile.absolutePath)
 }
