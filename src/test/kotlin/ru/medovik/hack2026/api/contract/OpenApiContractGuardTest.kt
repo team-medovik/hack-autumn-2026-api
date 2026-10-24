@@ -72,7 +72,7 @@ class OpenApiContractGuardTest {
     }
 
     @Test
-    fun `PATCH rejects unknown properties, empty groups and invalid JSON types`() {
+    fun `PATCH rejects unknown top-level properties, empty groups and invalid JSON types`() {
         val service = Mockito.mock(ModelSettingsService::class.java)
         val controller = ContractModelSettingsController(
             service = service,
@@ -80,7 +80,6 @@ class OpenApiContractGuardTest {
         )
         val auth = Mockito.mock(org.springframework.security.core.Authentication::class.java)
         val invalid = listOf<Map<String, Any?>>(
-            mapOf("version" to 1, "changes" to mapOf("factorWeights" to mapOf("typo" to 50))),
             mapOf("version" to 1, "changes" to mapOf("forecast" to emptyMap<String, Any?>())),
             mapOf("version" to 1, "changes" to emptyMap<String, Any?>()),
             mapOf("version" to 0, "changes" to mapOf("forecast" to mapOf("horizonDays" to 5))),
@@ -98,13 +97,23 @@ class OpenApiContractGuardTest {
     }
 
     @Test
-    fun `canonical contract disallows extra properties in patch request`() {
+    fun `PATCH additionalProperties matches the canonical contract`() {
         @Suppress("UNCHECKED_CAST")
         val components = document["components"] as Map<String, Any?>
         @Suppress("UNCHECKED_CAST")
         val schemas = components["schemas"] as Map<String, Map<String, Any?>>
-        for (name in listOf("PatchModelSettingsRequest", "ModelSettingsChanges", "PatchFactorWeights", "PatchRiskThresholds", "PatchFinanceSettings", "PatchForecastSettings")) {
-            assertFalse(schemas[name]?.get("additionalProperties") != false, "$name must disallow extra fields")
+
+        // The reference contract forbids extra keys only at these two object levels.
+        for (name in listOf("PatchModelSettingsRequest", "ModelSettingsChanges")) {
+            val schema = assertNotNull(schemas[name], "Missing schema $name")
+            assertEquals(false, schema["additionalProperties"], "$name must reject additional fields")
+        }
+
+        // The nested patch objects deliberately omit additionalProperties.
+        // In JSON Schema this means unknown nested properties are allowed by default.
+        for (name in listOf("PatchFactorWeights", "PatchRiskThresholds", "PatchFinanceSettings", "PatchForecastSettings")) {
+            val schema = assertNotNull(schemas[name], "Missing schema $name")
+            assertFalse(schema.containsKey("additionalProperties"), "$name must inherit the JSON Schema default")
         }
     }
 }
