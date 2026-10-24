@@ -325,7 +325,7 @@ jobs:
       - name: Stop and remove existing containers
         run: |
           if [ -f "$TARGET_DIR/docker-compose.yml" ]; then
-            docker compose -f "$TARGET_DIR/docker-compose.yml" down
+            sudo docker compose -f "$TARGET_DIR/docker-compose.yml" down
           fi
 
       - name: Clean target directory
@@ -390,16 +390,16 @@ jobs:
       - name: Build and deploy with Docker Compose
         run: |
           if [ -f "$TARGET_DIR/docker-compose.yml" ]; then
-            docker compose -f "$TARGET_DIR/docker-compose.yml" rm -f
+            sudo docker compose -f "$TARGET_DIR/docker-compose.yml" rm -f
           fi
 
-          docker compose -f "$TARGET_DIR/docker-compose.yml" up --build -d
+          sudo docker compose -f "$TARGET_DIR/docker-compose.yml" up --build -d
 
           sleep 60
 
-          if docker compose -f "$TARGET_DIR/docker-compose.yml" logs | grep -i "\[ERROR\]"; then
+          if sudo docker compose -f "$TARGET_DIR/docker-compose.yml" logs | grep -i "\[ERROR\]"; then
             echo "Ошибка деплоя. В логах найдены ошибки"
-            docker compose -f "$TARGET_DIR/docker-compose.yml" logs | grep -i "\[ERROR\]"
+            sudo docker compose -f "$TARGET_DIR/docker-compose.yml" logs | grep -i "\[ERROR\]"
             exit 1
           else
             echo "Ошибок в логах не найдено. Деплой успешен"
