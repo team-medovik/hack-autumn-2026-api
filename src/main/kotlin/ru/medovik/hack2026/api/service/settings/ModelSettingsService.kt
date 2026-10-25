@@ -24,6 +24,7 @@ import ru.medovik.hack2026.api.realtime.EntityChangedEvent
 import ru.medovik.hack2026.api.realtime.RealtimeEntity
 import ru.medovik.hack2026.api.service.risk.RiskEngine
 import ru.medovik.hack2026.api.service.risk.feature.RiskFeatureRegistry
+import ru.medovik.hack2026.api.service.ml.MlAssessmentService
 import tools.jackson.databind.json.JsonMapper
 import java.time.OffsetDateTime
 import java.time.ZoneOffset
@@ -36,6 +37,7 @@ class ModelSettingsService(
     private val jsonMapper: JsonMapper,
     private val calculationDate: CalculationDateRepository,
     private val events: ApplicationEventPublisher,
+    private val mlAssessment: MlAssessmentService,
 ) {
     private val riskEngine = RiskEngine()
     private val logger = LoggerFactory.getLogger(javaClass)
@@ -189,11 +191,12 @@ class ModelSettingsService(
             val result = riskEngine.calculate(
                 snapshot = snapshot,
                 settings = toRiskSettings(values),
-                evaluationTime = calculationDate.get().let { date ->
+                evaluationTime = if (stored.live) stored.takenAt.toInstant() else calculationDate.get().let { date ->
                     if (date.mode == "fixed") requireNotNull(date.fixedAt).toInstant() else java.time.Instant.now()
                 },
             )
-            result.customers.mapNotNull { it.attentionScore }.forEach { score ->
+            val assessed = mlAssessment.assess(stored, snapshot, result).result
+            assessed.customers.mapNotNull { it.attentionScore }.forEach { score ->
                 histogram[floor(score).toInt().coerceIn(0, 100)]++
             }
             logger.debug("Model settings histogram calculated: version={}, snapshotId={}, customers={}, scoredCustomers={}, elapsedMs={}",

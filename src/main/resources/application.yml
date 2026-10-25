@@ -10,6 +10,14 @@ spring:
 app:
   dashboard:
     metrics-refresh-ms: 5000
+  ml:
+    enabled: ${APP_ML_ENABLED:false}
+    base-url: ${APP_ML_BASE_URL:http://ml-service:8000}
+    service-token: ${APP_ML_SERVICE_TOKEN:}
+    model-version: ${APP_ML_MODEL_VERSION:}
+    request-timeout: ${APP_ML_REQUEST_TIMEOUT:2s}
+    cache-ttl: ${APP_ML_CACHE_TTL:30s}
+    max-history-events: ${APP_ML_MAX_HISTORY_EVENTS:100000}
   generator:
     enabled: ${APP_GENERATOR_ENABLED:false}
     use-for-dashboard: ${APP_GENERATOR_USE_FOR_DASHBOARD:false}
