@@ -5,6 +5,7 @@ import ru.medovik.hack2026.api.dto.settings.FeatureDefinition
 import ru.medovik.hack2026.api.service.risk.feature.impl.AwaitingRenewal
 import ru.medovik.hack2026.api.service.risk.feature.impl.AwaitingRenewalWithoutFunds
 import ru.medovik.hack2026.api.service.risk.feature.impl.BonusesExceedMoney
+import ru.medovik.hack2026.api.service.risk.feature.impl.ExpiryWithAutoRenew
 import ru.medovik.hack2026.api.service.risk.feature.impl.ExpiryWithoutAutoRenew
 import ru.medovik.hack2026.api.service.risk.feature.impl.InsufficientFunds
 import ru.medovik.hack2026.api.service.risk.feature.impl.SuspendedService
@@ -43,6 +44,11 @@ object RiskFeatureRegistry {
             BonusesExceedMoney(),
             FeatureDefinition("bonusesExceedMoney", "Бонусов больше денег", "Бонусный баланс превышает денежный баланс клиента."),
             10,
+        ),
+        RegisteredRiskFeature(
+            ExpiryWithAutoRenew(),
+            FeatureDefinition("expiringWithAutoRenewal", "Истекает с автопродлением", "Тут и по названию понятно."),
+            0,
         ),
     )
 
