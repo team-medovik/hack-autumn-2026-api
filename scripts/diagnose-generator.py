@@ -183,6 +183,7 @@ def main():
     api_networks = set(api["NetworkSettings"]["Networks"])
     ids = command(["docker", "ps", "-aq"])
     generators = []
+    ml_images = []
     for container_id in (ids or "").split():
         container = inspect(container_id)
         if not container:
@@ -190,7 +191,9 @@ def main():
         config = container["Config"]
         service = (config.get("Labels") or {}).get("com.docker.compose.service", "")
         name = container.get("Name", "").lstrip("/")
-        if service not in ("generator-api", "generator-worker", "generator-db", "postgres") and name not in ("generator-api", "generator-worker", "generator-db", "postgres"):
+        relevant = any(part in (service + " " + name + " " + config["Image"]).lower()
+                       for part in ("generator", "hack-autumn-2026-ml", "ml-service"))
+        if not relevant and service != "postgres" and name != "postgres":
             continue
         networks = set(container["NetworkSettings"]["Networks"])
         state = container["State"]
@@ -200,6 +203,8 @@ def main():
             "networks": sorted(networks), "sharedApiNetworks": sorted(networks & api_networks)}))
         if service == "generator-api" or name == "generator-api":
             generators.append(container)
+        if service == "ml-service" and state["Status"] == "running":
+            ml_images.append(config["Image"])
     for container in generators:
         generator_token = environment(container).get("GENERATOR_SERVICE_TOKEN", "")
         print(json.dumps({"probeFrom": container["Name"].lstrip("/"),
@@ -210,6 +215,15 @@ def main():
         print(output.strip() if output else json.dumps({"probe": "execution_failed"}))
     if not generators:
         print(json.dumps({"generatorApi": "container_not_found"}))
+    if ml_images:
+        # Use an already installed Python image in the API's exact network namespace.
+        # No host mounts, published ports, application writes or image downloads.
+        output = command(["docker", "run", "--rm", "--pull", "never", "-i", "--read-only",
+            "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
+            "--network", "container:" + API_CONTAINER, "--entrypoint", "python",
+            ml_images[0], "-B", "-c", PROBE], json.dumps({"url": url, "token": token}), timeout=100)
+        print(json.dumps({"probeFrom": "api_network_namespace"}))
+        print(output.strip() if output else json.dumps({"probe": "execution_failed"}))
     # curl is optional in the minimal JVM image; report explicitly if absent.
     available = command(["docker", "exec", API_CONTAINER, "sh", "-c", "command -v curl"])
     if available:
