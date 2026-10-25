@@ -8,6 +8,7 @@ import ru.medovik.hack2026.api.jooq.tables.records.BillingSnapshotsRecord
 import java.time.DayOfWeek
 import java.time.ZoneOffset
 import java.time.temporal.TemporalAdjusters
+import java.util.concurrent.atomic.AtomicBoolean
 import ru.medovik.hack2026.api.service.generator.GeneratorInbox
 import ru.medovik.hack2026.api.properties.GeneratorProperties
 
@@ -17,6 +18,13 @@ class BillingSnapshotRepository(
     private val generator: GeneratorInbox,
     private val generatorProperties: GeneratorProperties,
 ) {
+    private val useGeneratorForDashboard = AtomicBoolean(generatorProperties.useForDashboard)
+
+    fun usesGeneratorForDashboard(): Boolean = useGeneratorForDashboard.get()
+
+    fun selectDashboardSource(useGenerator: Boolean): Boolean =
+        useGeneratorForDashboard.getAndSet(useGenerator) != useGenerator
+
     fun listRecords(): List<SnapshotRecord> = dsl.selectFrom(BILLING_SNAPSHOTS)
         .orderBy(
             BILLING_SNAPSHOTS.CREATED_AT.desc(),
@@ -60,9 +68,11 @@ class BillingSnapshotRepository(
             rawFile,
         ) == 1) { "Не удалось сохранить снимок" }
     }
-    fun findLatest(): StoredBillingSnapshot? = if (generatorProperties.useForDashboard) {
+    fun findLatest(): StoredBillingSnapshot? = if (usesGeneratorForDashboard()) {
         generator.published(generatorProperties.sourceId)
-    } else dsl
+    } else findLatestUploaded()
+
+    private fun findLatestUploaded(): StoredBillingSnapshot? = dsl
         .selectFrom(BILLING_SNAPSHOTS)
         .orderBy(
             BILLING_SNAPSHOTS.CREATED_AT.desc(),
@@ -74,8 +84,8 @@ class BillingSnapshotRepository(
         ?.toStored()
 
     fun findDashboardHistory(): List<StoredBillingSnapshot> {
-        if (generatorProperties.useForDashboard) return listOfNotNull(findLatest())
-        val latest = findLatest() ?: return emptyList()
+        if (usesGeneratorForDashboard()) return listOfNotNull(generator.published(generatorProperties.sourceId))
+        val latest = findLatestUploaded() ?: return emptyList()
         val firstWeek = latest.takenAt.toInstant().atZone(ZoneOffset.UTC).toLocalDate()
             .with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
             .minusWeeks(8)

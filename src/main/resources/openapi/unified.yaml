@@ -146,7 +146,7 @@ paths:
         читает сохранённое значение; текущий завершает транзакцию до изменения. Запрос не меняет виртуальное время,
         очередь, события или курсор; рестарт worker не сбрасывает скорость. После ответа UI использует возвращённое
         timeScale. При потере ответа перечитайте GET и при необходимости повторите запрос. Пауза, reset, переключение
-        JSON/live и перемотка этим endpoint не реализованы.
+        JSON/live и перемотка этим endpoint не реализованы. Источник данных переключается отдельно через /api/v1/admin/source/mode.
       requestBody:
         required: true
         content:
@@ -213,6 +213,46 @@ paths:
                       lastError: {type: [string, 'null'], description: FETCH_FAILED или APPLY_FAILED; ошибка не пропускает события}
         '401': {description: Требуется авторизация}
         '403': {description: Требуется роль ADMIN}
+  /api/v1/admin/source/mode:
+    get:
+      tags: [Источник данных]
+      operationId: getDashboardSourceMode
+      summary: Текущий источник данных дашборда
+      description: Только ADMIN. Возвращает snapshot или generator.
+      responses:
+        '200':
+          description: Текущий режим.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DashboardSourceMode'}
+        '401': {description: Требуется авторизация}
+        '403': {description: Требуется роль ADMIN}
+    put:
+      tags: [Источник данных]
+      operationId: setDashboardSourceMode
+      summary: Переключить источник данных дашборда
+      description: >-
+        Только ADMIN. snapshot читает последний загруженный JSON, generator — последнюю опубликованную
+        проекцию событий. Загрузка снимка сама по себе не меняет режим. Переключение не удаляет данные
+        и отправляет SSE entity-changed с entity=SNAPSHOT. После рестарта действует
+        APP_GENERATOR_USE_FOR_DASHBOARD; переключение через API хранится только в памяти процесса.
+        Если генератор включён, но ещё не опубликовал проекцию, ответы по нему будут пустыми.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/DashboardSourceMode'}
+            example: {mode: snapshot}
+      responses:
+        '200':
+          description: Новый режим.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DashboardSourceMode'}
+        '400': {description: Разрешены только snapshot и generator}
+        '401': {description: Требуется авторизация}
+        '403': {description: Требуется роль ADMIN}
+        '409': {description: Режим generator недоступен, пока APP_GENERATOR_ENABLED=false}
   /api/v1/auth/login:
     post:
       tags:
@@ -1169,6 +1209,14 @@ components:
       - role
       - status
       - createdAt
+    DashboardSourceMode:
+      type: object
+      required: [mode]
+      properties:
+        mode:
+          type: string
+          enum: [snapshot, generator]
+          description: Активный источник данных для дашборда и карточек клиентов.
     SnapshotRecord:
       type: object
       description: Запись истории загрузок снимков биллинга
