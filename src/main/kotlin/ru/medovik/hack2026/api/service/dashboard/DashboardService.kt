@@ -298,6 +298,7 @@ class DashboardService(
                 } else null,
                 event = event,
                 autoRenew = if (service.status.isLive) service.autoProlong else null,
+                lossProbability = snapshot.lossProbabilities[service.id],
             )
         }
         val funding = client.risk.funding
@@ -410,7 +411,8 @@ class DashboardService(
                 evaluationTime = if (stored.live) stored.takenAt.toInstant() else calculationDate.evaluationTime(),
             )
             val assessed = mlAssessment.assess(stored, payload, result)
-            return LoadedSnapshot(stored = stored, payload = payload, risk = assessed.result, mlAnnotations = assessed.annotations)
+            return LoadedSnapshot(stored = stored, payload = payload, risk = assessed.result,
+                mlAnnotations = assessed.annotations, lossProbabilities = assessed.lossProbabilities)
         } catch (exception: Exception) {
             logger.error(
                 "Billing snapshot could not be evaluated for dashboard: snapshotId={}, takenAt={}",
@@ -602,6 +604,7 @@ class DashboardService(
         val payload: RiskSnapshot,
         val risk: RiskResult,
         val mlAnnotations: Map<Long, String> = emptyMap(),
+        val lossProbabilities: Map<Long, Double> = emptyMap(),
     )
 
     private data class ClientProjection(

@@ -11,7 +11,11 @@ import ru.medovik.hack2026.api.service.risk.HybridRiskAdjuster
 import java.time.Duration
 import java.util.Locale
 
-data class MlAssessment(val result: RiskResult, val annotations: Map<Long, String>)
+data class MlAssessment(
+    val result: RiskResult,
+    val annotations: Map<Long, String>,
+    val lossProbabilities: Map<Long, Double> = emptyMap(),
+)
 
 @Service
 class MlAssessmentService(
@@ -51,6 +55,6 @@ class MlAssessmentService(
             } else "Оценка алгоритма; ML не применён (${outcome?.reason ?: "NOT_APPLICABLE"})"
         }
         audit.enqueue(stored.id, base, final, batch, fallback)
-        return MlAssessment(final, annotations)
+        return MlAssessment(final, annotations, batch.probabilities)
     }
 }

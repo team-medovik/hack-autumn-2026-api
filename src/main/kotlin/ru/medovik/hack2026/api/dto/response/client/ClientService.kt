@@ -2,6 +2,7 @@ package ru.medovik.hack2026.api.dto.response.client
 
 import io.swagger.v3.oas.annotations.media.Schema
 import java.math.BigDecimal
+import com.fasterxml.jackson.annotation.JsonInclude
 
 @Schema(description = "Услуга клиента с оценкой риска и ближайшим событием")
 data class ClientService(
@@ -21,4 +22,8 @@ data class ClientService(
     val event: ClientServiceEvent?,
     @field:Schema(description = "Автопродление или null для неактивной услуги", nullable = true)
     val autoRenew: Boolean?,
+    @get:JsonInclude(JsonInclude.Include.ALWAYS)
+    @field:Schema(description = "Вероятность отсутствия продления или оплаченной замены к сроку + 5 суток; null, если прогноза ML нет. Не score/100.",
+        nullable = true, minimum = "0", maximum = "1", example = "0.75")
+    val lossProbability: Double? = null,
 )
