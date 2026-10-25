@@ -181,3 +181,28 @@ USERS_1_OIDC_SUBJECT='user-id-из-keycloak'
 4. Откройте в браузере https://ВАШ-ДОМЕН/api/v1/auth/oidc/keycloak/login. После входа провайдер вернёт браузер на callback, API установит HttpOnly refresh_token и перенаправит на APP_AUTH_OIDC_SUCCESS_REDIRECT_URI. Фронтенд вызывает POST /api/v1/auth/refresh с cookie и получает accessToken для заголовка Authorization: Bearer. Cookie имеет SameSite=Strict и путь /api/v1/auth, поэтому фронтенд и API должны работать на одном origin.
 
 По умолчанию APP_AUTH_OIDC_AUTO_LINK_BY_EMAIL=false: вход разрешён только для заранее привязанной пары issuer + sub. При true можно привязать существующую активную учётную запись по совпадающему email-логину, только если провайдер передал email_verified=true. Локальный вход по паролю остаётся доступен при включённом OIDC.
+
+
+## Межсервисные секреты GitHub Actions
+
+`ENV_PRODUCTION` остаётся основным набором настроек API. Его значение не нужно
+перезаписывать при создании токенов. В API добавлены отдельные repository Secrets:
+
+| Secret API | Совпадающий Secret ML-репозитория | Назначение |
+|---|---|---|
+| `APP_ML_SERVICE_TOKEN` | `ML_SERVICE_TOKEN` | Авторизация API в модели |
+| `APP_GENERATOR_SERVICE_TOKEN` | `GENERATOR_SERVICE_TOKEN` | Чтение событий генератора |
+
+При последующем деплое workflow дописывает только заданные токены в серверный `.env`.
+Остальные настройки, включая datasource, OIDC, JWT и флаги интеграции, сохраняются.
+Пустой отдельный Secret не стирает существующий токен из `ENV_PRODUCTION`. Значения
+не выводятся в логи. Эти токены не заменяют JWT сотрудников или пароль PostgreSQL.
+
+Само создание Secrets не запускает деплой. Код интеграции поставляется отдельным
+[PR #42](https://github.com/team-medovik/hack-autumn-2026-api/pull/42).
+Для его включения нужны `APP_ML_ENABLED=true`, `APP_GENERATOR_ENABLED=true`,
+`APP_GENERATOR_USE_FOR_DASHBOARD=true`, адреса `http://ml-service:8000` и
+`http://generator-api:8000` в сети `backend` и согласованная версия модели.
+Существующие значения этих параметров эта настройка токенов не изменяет.
+ML workflow использует `ML_SERVICE_TOKEN`; запуск генератора ведётся отдельно и
+должен передавать `GENERATOR_SERVICE_TOKEN` из Secrets в окружение generator-api.
