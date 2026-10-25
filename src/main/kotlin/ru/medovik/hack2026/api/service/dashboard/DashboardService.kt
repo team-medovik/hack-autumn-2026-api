@@ -38,6 +38,7 @@ import ru.medovik.hack2026.api.dto.response.risk.ServiceRiskResult
 import ru.medovik.hack2026.api.repository.dashboard.BillingSnapshotRepository
 import ru.medovik.hack2026.api.repository.dashboard.StoredBillingSnapshot
 import ru.medovik.hack2026.api.service.risk.RiskEngine
+import ru.medovik.hack2026.api.service.ml.MlAssessmentService
 import ru.medovik.hack2026.api.service.settings.ModelSettingsService
 import ru.medovik.hack2026.api.service.settings.CalculationDateService
 import tools.jackson.databind.json.JsonMapper
@@ -56,6 +57,7 @@ class DashboardService(
     private val jsonMapper: JsonMapper,
     private val modelSettings: ModelSettingsService,
     private val calculationDate: CalculationDateService,
+    private val mlAssessment: MlAssessmentService,
 ) {
     private val riskEngine = RiskEngine()
     private val logger = LoggerFactory.getLogger(javaClass)
@@ -251,13 +253,16 @@ class DashboardService(
             .sortedWith(compareByDescending<FeatureContribution> { it.contribution }.thenBy { it.code })
         val rawScore = leading?.rawScore ?: 0.0
         val factorScale = if (rawScore > 100.0) 100.0 / rawScore else 1.0
-        val factors = positive.map { feature ->
+        val factors = positive.mapIndexed { index, feature ->
             ClientFactor(
                 id = reasonId(feature.code),
-                label = feature.explanation,
+                label = feature.explanation + if (index == 0) leading?.serviceId?.let { snapshot.mlAnnotations[it] }?.let { "; $it" }.orEmpty() else "",
                 points = feature.contribution * factorScale,
             )
         }
+        val cardFactors = if (factors.isEmpty() && leading?.score != null && leading.score > 0 && snapshot.mlAnnotations.containsKey(leading.serviceId)) {
+            listOf(ClientFactor("ml-adjustment", snapshot.mlAnnotations.getValue(leading.serviceId), leading.score))
+        } else factors
         val services = sourceServices.map { service ->
             val risk = scored.getValue(service.id)
             val status = when (service.status) {
@@ -297,7 +302,7 @@ class DashboardService(
             email = client.account.email,
             score = client.score,
             level = client.level,
-            factors = factors,
+            factors = cardFactors,
             balance = ClientCardBalance(
                 available = euros(funding.availableFunds),
                 required = if (client.score == null || funding.requiredFunds == 0L) null else euros(funding.requiredFunds),
@@ -400,7 +405,8 @@ class DashboardService(
                 settings = modelSettings.riskSettings(),
                 evaluationTime = if (stored.live) stored.takenAt.toInstant() else calculationDate.evaluationTime(),
             )
-            return LoadedSnapshot(stored = stored, payload = payload, risk = result)
+            val assessed = mlAssessment.assess(stored, payload, result)
+            return LoadedSnapshot(stored = stored, payload = payload, risk = assessed.result, mlAnnotations = assessed.annotations)
         } catch (exception: Exception) {
             logger.error(
                 "Billing snapshot could not be evaluated for dashboard: snapshotId={}, takenAt={}",
@@ -441,11 +447,12 @@ class DashboardService(
                 risk = risk,
                 monthlyLoss = loss,
                 reasonId = reasonId,
-                reason = reasonId?.let { reasonLabel(it) },
-                factors = leadingFactors.map { feature ->
+                reason = listOfNotNull(reasonId?.let { reasonLabel(it) }, leadingService?.serviceId?.let { snapshot.mlAnnotations[it] })
+                    .takeIf { it.isNotEmpty() }?.joinToString("; "),
+                factors = leadingFactors.mapIndexed { index, feature ->
                     ScoreFactor(
                         id = reasonId(feature.code),
-                        label = factorLabel(code = feature.code, risk = risk),
+                        label = factorLabel(code = feature.code, risk = risk) + if (index == 0) leadingService?.serviceId?.let { snapshot.mlAnnotations[it] }?.let { "; $it" }.orEmpty() else "",
                         points = feature.contribution.coerceIn(0.0, 100.0),
                     )
                 },
@@ -586,6 +593,7 @@ class DashboardService(
         val stored: StoredBillingSnapshot,
         val payload: RiskSnapshot,
         val risk: RiskResult,
+        val mlAnnotations: Map<Long, String> = emptyMap(),
     )
 
     private data class ClientProjection(

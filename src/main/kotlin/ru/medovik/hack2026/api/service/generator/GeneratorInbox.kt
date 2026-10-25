@@ -112,7 +112,8 @@ class GeneratorInbox(private val dsl: DSLContext, private val json: JsonMapper) 
         // Never expose a partial page or clock beyond the events applied to that snapshot.
         if (row.get("tail_complete", Boolean::class.java) && next == row.long("received_sequence")) {
             tx.execute("""UPDATE generator_consumers SET published_projection = projection,
-                published_at = source_as_of, published_revision = source_revision WHERE source_id = ?""", source)
+                published_at = source_as_of, published_revision = source_revision,
+                published_sequence = applied_sequence WHERE source_id = ?""", source)
         }
         events.size
     }
@@ -125,9 +126,10 @@ class GeneratorInbox(private val dsl: DSLContext, private val json: JsonMapper) 
     }
 
     fun published(source: String): StoredBillingSnapshot? = dsl.fetchOne(
-        "SELECT run_id, published_at, published_revision, published_projection FROM generator_consumers WHERE source_id = ? AND published_projection IS NOT NULL", source)
+        "SELECT run_id, published_at, published_revision, published_projection, published_sequence FROM generator_consumers WHERE source_id = ? AND published_projection IS NOT NULL", source)
         ?.let { StoredBillingSnapshot("generator:${it.get("run_id")}:${it.get("published_revision")}",
-            it.get("published_at", OffsetDateTime::class.java), it.get("published_projection", JSONB::class.java).data(), live = true) }
+            it.get("published_at", OffsetDateTime::class.java), it.get("published_projection", JSONB::class.java).data(), live = true,
+            sourceRunId = it.get("run_id", String::class.java), sourceSequence = it.get("published_sequence", Long::class.java)) }
 
     private fun Record.long(field: String): Long = get(field, Long::class.java)
 }

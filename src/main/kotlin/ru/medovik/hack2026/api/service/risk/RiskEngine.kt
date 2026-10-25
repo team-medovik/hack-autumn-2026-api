@@ -14,6 +14,7 @@ import ru.medovik.hack2026.api.service.risk.feature.impl.AwaitingRenewal
 import ru.medovik.hack2026.api.service.risk.feature.impl.AwaitingRenewalWithoutFunds
 import ru.medovik.hack2026.api.service.risk.feature.impl.ExpiryWithoutAutoRenew
 import ru.medovik.hack2026.api.service.risk.feature.util.FeatureContext
+import ru.medovik.hack2026.api.service.risk.feature.util.FeatureEvaluation
 import ru.medovik.hack2026.api.service.risk.feature.impl.InsufficientFunds
 import ru.medovik.hack2026.api.service.risk.feature.RiskFeature
 import ru.medovik.hack2026.api.service.risk.feature.impl.SuspendedService
@@ -98,7 +99,11 @@ class RiskEngine(
             evaluationTime = evaluationTime,
         )
         val contributions = if (!service.status.isLive) emptyList() else features.map { feature ->
-            val evaluated = feature.evaluate(context)
+            // Awaiting payment is an observed state: use its dedicated factors,
+            // without charging the same shortage again through F2 or bonus F6.
+            val evaluated = if (service.status == ServiceStatus.PROLONG_WAIT && feature.code !in setOf("F3", "F4")) {
+                FeatureEvaluation.notApplicable()
+            } else feature.evaluate(context)
             val weight = settings.weights.getValue(feature.code)
             FeatureContribution(
                 code = feature.code,
