@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Team Medovik — Churn Risk Analyzer API
-  version: 1.1.0-ml-contract
+  version: 1.2.0-simulation-contract
   description: |
     Единый целевой контракт frontend и backend. Swagger UI `/api/v1/docs` загружает
     этот документ через `/api/v1/openapi`; `/api/v1/internal-openapi` — отдельная
@@ -97,6 +97,85 @@ tags:
 security: &id001
 - bearerAuth: []
 paths:
+  /api/v1/admin/simulation:
+    get:
+      tags:
+      - Настройки приложения
+      operationId: getSimulationState
+      summary: Состояние живой симуляции для администратора
+      description: 'Только ADMIN. Читает состояние генератора напрямую, а не отстающую проекцию inbox. GET не двигает
+        часы. Используйте для вкладки Другое: статус, виртуальное время и выбранная скорость. При 503 не показывайте
+        устаревшие данные как подтверждение работающей симуляции.'
+      responses:
+        '200':
+          description: Текущее сохранённое состояние.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimulationState'
+        '401': &speed_id001
+          description: Нет пользовательской авторизации.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+        '403': &speed_id002
+          description: Требуется роль ADMIN.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+        '503': &speed_id003
+          description: Генератор выключен, недоступен или не поддерживает изменение скорости в PostgreSQL; успешное
+            сохранение не подтверждено.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+  /api/v1/admin/simulation/speed:
+    patch:
+      tags:
+      - Настройки приложения
+      operationId: setSimulationSpeed
+      summary: Изменить скорость живой симуляции
+      description: Только ADMIN. Абсолютная установка ×1/×10/×60 идемпотентна; параллельные записи сериализуются,
+        последняя успешная запись задаёт скорость. PostgreSQL сохраняет её под блокировкой запуска. Новый шаг worker
+        читает сохранённое значение; текущий завершает транзакцию до изменения. Запрос не меняет виртуальное время,
+        очередь, события или курсор; рестарт worker не сбрасывает скорость. После ответа UI использует возвращённое
+        timeScale. При потере ответа перечитайте GET и при необходимости повторите запрос. Пауза, reset, переключение
+        JSON/live и перемотка этим endpoint не реализованы.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SimulationSpeedRequest'
+            example:
+              runId: 6f5fb823-01c2-4c8a-a8d9-a20871bf09c3
+              timeScale: 60
+      responses:
+        '200':
+          description: Скорость сохранена; новый коэффициент применяется со следующего шага.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimulationState'
+        '400':
+          description: 'Некорректный runId или скорость: разрешены только целые 1, 10, 60; строки, дроби, boolean
+            и лишние поля отклоняются.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+        '401': *speed_id001
+        '403': *speed_id002
+        '409':
+          description: runId больше не совпадает с запуском генератора; перечитайте GET состояния.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+        '503': *speed_id003
   /api/v1/admin/generator/consumer:
     get:
       tags: [Источник данных]
@@ -768,6 +847,82 @@ components:
       bearerFormat: JWT
       description: JWT access token из POST /api/v1/auth/login
   schemas:
+    SimulationSpeedRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - runId
+      - timeScale
+      properties:
+        runId:
+          type: string
+          minLength: 1
+          maxLength: 255
+          pattern: ".*\\S.*"
+          description: Запуск из последнего GET состояния. Защищает от изменения другого run после переключения источника.
+        timeScale:
+          type: integer
+          enum:
+          - 1
+          - 10
+          - 60
+          description: 'Пресет скорости: виртуальных секунд за реальную секунду. ×60 означает целевую 1 минуту симуляции
+            за 1 секунду; под нагрузкой темп может быть ниже.'
+          example: 60
+    SimulationState:
+      type: object
+      additionalProperties: false
+      required:
+      - runId
+      - virtualTime
+      - timeScale
+      - workerState
+      - finished
+      - syntheticOnly
+      - supportedTimeScales
+      properties:
+        runId:
+          type: string
+          description: Текущий запуск генератора. Не меняется при смене скорости.
+        virtualTime:
+          type: string
+          format: date-time
+          description: Текущий сохранённый момент симуляции; для строки виртуального времени в UI.
+        timeScale:
+          type: number
+          exclusiveMinimum: 0
+          description: Сохранённая скорость; применяется со следующего шага. У старого run может отличаться от новых
+            пресетов.
+          example: 60
+        workerState:
+          type: string
+          enum:
+          - starting
+          - running
+          - paused
+          - finished
+          - error
+          description: Состояние worker с учётом свежести heartbeat. Не считать stopped/error работающей симуляцией.
+        finished:
+          type: boolean
+          description: Конечный горизонт завершён. Смена скорости не запускает историю заново.
+        syntheticOnly:
+          type: boolean
+          const: true
+          description: Обязательная отметка синтетических данных в интерфейсе.
+        supportedTimeScales:
+          type: array
+          items:
+            type: integer
+            enum:
+            - 1
+            - 10
+            - 60
+          const:
+          - 1
+          - 10
+          - 60
+          description: Кнопки ×1, ×10, ×60 из макета.
     RealtimeEntity:
       type: string
       enum:
