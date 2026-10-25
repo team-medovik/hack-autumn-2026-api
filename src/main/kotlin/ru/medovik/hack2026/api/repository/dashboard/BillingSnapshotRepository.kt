@@ -39,10 +39,12 @@ class BillingSnapshotRepository(
         }
 
     fun insert(record: SnapshotRecord, payload: String, rawFile: ByteArray) {
+        // Plain SQL DSLContext.execute() has no generated-column type metadata: jOOQ
+        // may bind OffsetDateTime as VARCHAR. Cast explicitly for PostgreSQL TIMESTAMPTZ.
         check(dsl.execute(
             """INSERT INTO billing_snapshots
                 (id, taken_at, created_at, payload, file_name, uploaded_by, clients_count, services_count, raw_file)
-                VALUES (?, ?, ?, CAST(? AS jsonb), ?, ?, ?, ?, ?)""",
+                VALUES (?, CAST(? AS timestamptz), CAST(? AS timestamptz), CAST(? AS jsonb), ?, ?, ?, ?, ?)""",
             record.id,
             record.uploadedAt,
             record.uploadedAt,
