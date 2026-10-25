@@ -2,8 +2,12 @@ package ru.medovik.hack2026.api.service.generator
 
 import org.springframework.stereotype.Component
 import org.springframework.http.HttpStatus
+import org.slf4j.LoggerFactory
+import java.io.IOException
 import java.time.Instant
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.ExecutionException
+import java.util.concurrent.TimeoutException
 import ru.medovik.hack2026.api.properties.GeneratorProperties
 import tools.jackson.databind.DeserializationFeature
 import tools.jackson.databind.MapperFeature
@@ -13,6 +17,7 @@ import java.net.URLEncoder
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
+import java.net.http.HttpTimeoutException
 import java.nio.charset.StandardCharsets
 
 interface GeneratorSource {
@@ -22,6 +27,7 @@ interface GeneratorSource {
 
 @Component
 class GeneratorHttpClient(private val properties: GeneratorProperties, mapper: JsonMapper) : GeneratorSource {
+    private val logger = LoggerFactory.getLogger(javaClass)
     private val json = mapper.rebuild().disable(DeserializationFeature.ACCEPT_FLOAT_AS_INT)
         .disable(MapperFeature.ALLOW_COERCION_OF_SCALARS).enable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES).build()
     private val http = HttpClient.newBuilder().connectTimeout(properties.requestTimeout)
@@ -43,9 +49,17 @@ class GeneratorHttpClient(private val properties: GeneratorProperties, mapper: J
     }
 
     private fun control(change: SimulationSpeedRequest?): SimulationStatus {
-        fun unavailable() = SimulationControlException(HttpStatus.SERVICE_UNAVAILABLE,
-            "SIMULATION_UNAVAILABLE", "Живая симуляция недоступна")
-        if (!properties.enabled || properties.serviceToken.length < 16) throw unavailable()
+        fun unavailable(reason: String, upstreamStatus: Int? = null): SimulationControlException {
+            // Only fixed classifications and HTTP status codes belong in logs, never
+            // exception messages, URLs, credentials, run IDs or upstream response bodies.
+            logger.warn("Generator control unavailable: operation={}, reason={}, upstreamStatus={}",
+                if (change == null) "status" else "speed", reason, upstreamStatus)
+            return SimulationControlException(HttpStatus.SERVICE_UNAVAILABLE,
+                "SIMULATION_UNAVAILABLE", "Живая симуляция недоступна")
+        }
+        if (!properties.enabled) throw unavailable("disabled")
+        if (properties.serviceToken.length < 16) throw unavailable("missing_token")
+        var readingResponse = false
         try {
             val path = if (change == null) "/internal/v1/generator/status" else "/internal/v1/generator/speed"
             val builder = HttpRequest.newBuilder(URI(properties.baseUrl.trimEnd('/') + path))
@@ -66,9 +80,10 @@ class GeneratorHttpClient(private val properties: GeneratorProperties, mapper: J
                 409 -> throw SimulationControlException(HttpStatus.CONFLICT, "SIMULATION_RUN_CHANGED",
                     "Запуск симуляции изменился; обновите состояние")
                 400, 422 -> if (change != null) throw SimulationControlException(HttpStatus.BAD_REQUEST,
-                    "INVALID_SIMULATION_SPEED", "Генератор отклонил параметры скорости") else throw unavailable()
-                else -> throw unavailable()
+                    "INVALID_SIMULATION_SPEED", "Генератор отклонил параметры скорости") else throw unavailable("upstream_http_status", response.statusCode())
+                else -> throw unavailable("upstream_http_status", response.statusCode())
             }
+            readingResponse = true
             check(bytes.size <= 32 * 1024)
             val root = json.readTree(bytes)
             val core = root.get("generator")
@@ -90,10 +105,16 @@ class GeneratorHttpClient(private val properties: GeneratorProperties, mapper: J
             throw error
         } catch (_: InterruptedException) {
             Thread.currentThread().interrupt()
-            throw unavailable()
-        } catch (_: Exception) {
-            // Neither upstream bodies nor exception messages may reveal credentials.
-            throw unavailable()
+            throw unavailable("interrupted")
+        } catch (error: Exception) {
+            val cause = if (error is ExecutionException) error.cause ?: error else error
+            val reason = when {
+                readingResponse -> "invalid_response"
+                cause is TimeoutException || cause is HttpTimeoutException -> "timeout"
+                cause is IOException -> "connection_error"
+                else -> "internal_error"
+            }
+            throw unavailable(reason)
         }
     }
 
