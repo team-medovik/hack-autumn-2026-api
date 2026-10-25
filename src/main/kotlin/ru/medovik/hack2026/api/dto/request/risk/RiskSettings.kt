@@ -1,17 +1,13 @@
 package ru.medovik.hack2026.api.dto.request.risk
 
 import ru.medovik.hack2026.api.dto.response.risk.RiskLevel
+import ru.medovik.hack2026.api.service.risk.feature.RiskFeatureRegistry
 
 data class RiskSettings(
     val horizonDays: Int = 7,
-    val weights: Map<String, Double> = mapOf(
-        "F1" to 50.0,
-        "F2" to 40.0,
-        "F3" to 70.0,
-        "F4" to 30.0,
-        "F5" to 15.0,
-        "F6" to 10.0,
-    ),
+    val weights: Map<String, Double> = RiskFeatureRegistry.entries.associate {
+        it.feature.code to it.defaultWeight.toDouble()
+    },
     val mediumThreshold: Double = 40.0,
     val highThreshold: Double = 70.0,
     val bonusesAsMoney: Boolean = true,

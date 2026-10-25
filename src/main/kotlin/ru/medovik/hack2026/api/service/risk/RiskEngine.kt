@@ -1,5 +1,6 @@
 package ru.medovik.hack2026.api.service.risk
 
+import org.slf4j.LoggerFactory
 import ru.medovik.hack2026.api.dto.request.risk.RiskSettings
 import ru.medovik.hack2026.api.dto.request.risk.Account
 import ru.medovik.hack2026.api.dto.request.risk.RiskSnapshot
@@ -10,30 +11,20 @@ import ru.medovik.hack2026.api.dto.response.risk.FeatureContribution
 import ru.medovik.hack2026.api.dto.response.risk.FundingSummary
 import ru.medovik.hack2026.api.dto.response.risk.RiskResult
 import ru.medovik.hack2026.api.dto.response.risk.ServiceRiskResult
-import ru.medovik.hack2026.api.service.risk.feature.impl.AwaitingRenewal
-import ru.medovik.hack2026.api.service.risk.feature.impl.AwaitingRenewalWithoutFunds
-import ru.medovik.hack2026.api.service.risk.feature.impl.ExpiryWithoutAutoRenew
 import ru.medovik.hack2026.api.service.risk.feature.util.FeatureContext
-import ru.medovik.hack2026.api.service.risk.feature.impl.InsufficientFunds
 import ru.medovik.hack2026.api.service.risk.feature.RiskFeature
-import ru.medovik.hack2026.api.service.risk.feature.impl.SuspendedService
-import ru.medovik.hack2026.api.service.risk.feature.impl.BonusesExceedMoney
+import ru.medovik.hack2026.api.service.risk.feature.RiskFeatureRegistry
 import java.time.Duration
 import java.time.Instant
 
 /** Stateless calculation: no database, wall clock or input mutation. */
 class RiskEngine(
-    private val features: List<RiskFeature> = listOf(
-        ExpiryWithoutAutoRenew(),
-        InsufficientFunds(),
-        AwaitingRenewal(),
-        AwaitingRenewalWithoutFunds(),
-        SuspendedService(),
-        BonusesExceedMoney(),
-    ),
+    private val features: List<RiskFeature> = RiskFeatureRegistry.entries.map { it.feature },
     private val balanceSimulator: BalanceSimulator = BalanceSimulator(),
     private val customerAggregator: CustomerRiskAggregator = CustomerRiskAggregator(),
 ) {
+    private val logger = LoggerFactory.getLogger(javaClass)
+
     init {
         require(features.map { it.code }.distinct().size == features.size) { "Duplicate feature codes" }
     }
@@ -43,6 +34,9 @@ class RiskEngine(
         settings: RiskSettings = RiskSettings(),
         evaluationTime: Instant,
     ): RiskResult {
+        logger.debug("Risk calculation started: accounts={}, services={}, transactions={}, features={}, evaluationTime={}, horizonDays={}",
+            snapshot.accounts.size, snapshot.services.size, snapshot.transactions.size,
+            features.map { it.code }, evaluationTime, settings.horizonDays)
         validate(snapshot)
         require(features.all { it.code in settings.weights }) { "Missing weight for a registered feature" }
         val settingsSnapshot = settings.copy(weights = settings.weights.toMap())
@@ -75,6 +69,9 @@ class RiskEngine(
                 settings = settingsSnapshot,
             )
         }
+        logger.debug("Risk calculation completed: accounts={}, services={}, scoredServices={}, scoredCustomers={}",
+            customers.size, serviceResults.size, serviceResults.count { it.score != null },
+            customers.count { it.attentionScore != null })
         return RiskResult(
             evaluationTime = evaluationTime,
             settings = settingsSnapshot,
@@ -100,6 +97,11 @@ class RiskEngine(
         val contributions = if (!service.status.isLive) emptyList() else features.map { feature ->
             val evaluated = feature.evaluate(context)
             val weight = settings.weights.getValue(feature.code)
+            if (logger.isTraceEnabled) {
+                logger.trace("Risk feature evaluated: serviceId={}, featureCode={}, applicable={}, strength={}, weight={}, contribution={}",
+                    service.id, feature.code, evaluated.applicable, evaluated.strength, weight,
+                    weight * evaluated.strength)
+            }
             FeatureContribution(
                 code = feature.code,
                 applicable = evaluated.applicable,

@@ -1197,62 +1197,45 @@ components:
       - fixedAt
     FactorWeights:
       type: object
-      description: 'Веса факторов риска: каждое значение от 0 до 100'
-      properties:
-        awaitingPayment:
-          type: integer
-          format: int32
-          description: Ожидание оплаты Вес экспертного фактора, 0–100 баллов.
-          example: 70
-          maximum: 100
-          minimum: 0
-        expiringWithoutAutoRenewal:
-          type: integer
-          format: int32
-          description: Истечение без автопродления Вес экспертного фактора, 0–100 баллов.
-          example: 50
-          maximum: 100
-          minimum: 0
-        insufficientFunds:
-          type: integer
-          format: int32
-          description: Недостаточно средств Вес экспертного фактора, 0–100 баллов.
-          example: 40
-          maximum: 100
-          minimum: 0
-        awaitingPaymentWithoutFunds:
-          type: integer
-          format: int32
-          description: Ожидание оплаты без средств Вес экспертного фактора, 0–100 баллов.
-          example: 30
-          maximum: 100
-          minimum: 0
-        disabledByClient:
-          type: integer
-          format: int32
-          description: Отключение клиентом Вес экспертного фактора, 0–100 баллов.
-          example: 15
-          maximum: 100
-          minimum: 0
-        bonusesExceedMoney:
-          type: integer
-          format: int32
-          description: Бонусов больше денег Вес экспертного фактора, 0–100 баллов.
-          example: 10
-          maximum: 100
-          minimum: 0
-      required:
-      - awaitingPayment
-      - expiringWithoutAutoRenewal
-      - insufficientFunds
-      - awaitingPaymentWithoutFunds
-      - disabledByClient
-      - bonusesExceedMoney
+      description: >-
+        Веса признаков риска: ключ признака → вес 0–100 баллов. Набор ключей совпадает с
+        ModelSettings.featureDefinitions[].key. Новый признак, зарегистрированный на сервере,
+        появляется здесь без изменения контракта.
       additionalProperties:
         type: integer
+        format: int32
         minimum: 0
         maximum: 100
-        description: 'Новый зарегистрированный признак: ключ признака -> экспертный вес'
+      example:
+        awaitingPayment: 70
+        expiringWithoutAutoRenewal: 50
+        insufficientFunds: 40
+        awaitingPaymentWithoutFunds: 30
+        disabledByClient: 15
+        bonusesExceedMoney: 10
+    FeatureDefinition:
+      type: object
+      description: Признак риска из реестра сервера. Порядок в массиве — порядок показа на экране.
+      properties:
+        key:
+          type: string
+          description: Стабильный код признака. Ключ в FactorWeights и id в ClientFactor/ScoreFactor.
+          pattern: '^[a-z][a-zA-Z0-9]*$'
+          example: insufficientFunds
+        label:
+          type: string
+          description: Название для экрана настроек и причин риска
+          example: Не хватает средств на продление
+        description:
+          type: string
+          description: Что означает признак — текст подсказки «?»
+          example: >-
+            Денег на счёте меньше, чем нужно на продления в горизонте прогноза. Чем больше
+            нехватка, тем сильнее.
+      required:
+        - key
+        - label
+        - description
     RiskThresholds:
       type: object
       description: 'Порог LOW: score < medium; MEDIUM: medium <= score < high; HIGH: score >= high. Инвариант high
@@ -1343,7 +1326,8 @@ components:
       - forecast
     ModelSettings:
       type: object
-      description: Полные настройки модели с версией и распределением score. Сохраняются в PostgreSQL, переживают
+      description:
+        Полные настройки модели с версией и распределением score. Сохраняются в PostgreSQL, переживают
         рестарт.
       properties:
         version:
@@ -1376,27 +1360,32 @@ components:
           maxItems: 101
         featureDefinitions:
           type: array
-          description: Опциональный расширяемый каталог признаков для динамического отображения на фронте.
+          description: |-
+            Реестр признаков риска; по нему фронт строит секцию весов. Порядок в массиве —
+            порядок показа на экране.
+
+            Инвариант: множество featureDefinitions[].key совпадает с ключами
+            values.factorWeights и defaults.factorWeights.
+
+            Как добавить новый признак (только бэкенд, фронт и контракт не меняются):
+            1. Реализовать вычисление признака: вклад 0–1 для услуги, итоговые баллы —
+               вклад × вес.
+            2. Зарегистрировать признак в реестре: key (camelCase), label, description,
+               вес по умолчанию 0–100.
+            3. Признак сам попадает в featureDefinitions, defaults.factorWeights и
+               values.factorWeights. Сохранённые настройки, где ключа ещё нет, при чтении
+               дополняются весом по умолчанию — иначе фронт не покажет слайдер.
+            4. В объяснениях клиента (ClientFactor, ScoreFactor) id фактора равен key.
           items:
-            type: object
-            required:
-            - key
-            - label
-            - description
-            properties:
-              key:
-                type: string
-              label:
-                type: string
-              description:
-                type: string
+            $ref: '#/components/schemas/FeatureDefinition'
       required:
-      - version
-      - updatedAt
-      - updatedBy
-      - values
-      - defaults
-      - scoreHistogram
+        - version
+        - updatedAt
+        - updatedBy
+        - values
+        - defaults
+        - scoreHistogram
+        - featureDefinitions
     SaveModelSettingsRequest:
       type: object
       description: Сохранение модели с проверкой версии из последнего GET
@@ -2302,56 +2291,17 @@ components:
         При работе из браузера передаётся файл как application/json целиком, НЕ multipart.
     PatchFactorWeights:
       type: object
-      description: 'Веса факторов риска: каждое значение от 0 до 100'
-      properties:
-        awaitingPayment:
-          type: integer
-          format: int32
-          description: Ожидание оплаты Вес экспертного фактора, 0–100 баллов.
-          example: 70
-          maximum: 100
-          minimum: 0
-        expiringWithoutAutoRenewal:
-          type: integer
-          format: int32
-          description: Истечение без автопродления Вес экспертного фактора, 0–100 баллов.
-          example: 50
-          maximum: 100
-          minimum: 0
-        insufficientFunds:
-          type: integer
-          format: int32
-          description: Недостаточно средств Вес экспертного фактора, 0–100 баллов.
-          example: 40
-          maximum: 100
-          minimum: 0
-        awaitingPaymentWithoutFunds:
-          type: integer
-          format: int32
-          description: Ожидание оплаты без средств Вес экспертного фактора, 0–100 баллов.
-          example: 30
-          maximum: 100
-          minimum: 0
-        disabledByClient:
-          type: integer
-          format: int32
-          description: Отключение клиентом Вес экспертного фактора, 0–100 баллов.
-          example: 15
-          maximum: 100
-          minimum: 0
-        bonusesExceedMoney:
-          type: integer
-          format: int32
-          description: Бонусов больше денег Вес экспертного фактора, 0–100 баллов.
-          example: 10
-          maximum: 100
-          minimum: 0
+      description: >-
+        Только изменённые веса: ключ признака → новый вес 0–100. Ключ, которого нет в
+        featureDefinitions, отклоняется с 422.
       additionalProperties:
         type: integer
+        format: int32
         minimum: 0
         maximum: 100
-        description: 'Новый зарегистрированный признак: ключ признака -> экспертный вес'
       minProperties: 1
+      example:
+        insufficientFunds: 55
     PatchRiskThresholds:
       type: object
       description: 'Порог LOW: score < medium; MEDIUM: medium <= score < high; HIGH: score >= high. Инвариант high

@@ -5,7 +5,7 @@ import io.swagger.v3.oas.annotations.media.Schema
 @Schema(description = "Все группы параметров модели риска")
 data class ModelSettingsValues(
     @field:Schema(description = "Веса факторов риска")
-    val factorWeights: FactorWeights,
+    val factorWeights: Map<String, Int>,
     @field:Schema(description = "Пороги среднего и высокого риска")
     val riskThresholds: RiskThresholds,
     @field:Schema(description = "Правила учёта денег")

@@ -39,6 +39,7 @@ import ru.medovik.hack2026.api.dto.response.risk.ServiceRiskResult
 import ru.medovik.hack2026.api.repository.dashboard.BillingSnapshotRepository
 import ru.medovik.hack2026.api.repository.dashboard.StoredBillingSnapshot
 import ru.medovik.hack2026.api.service.risk.RiskEngine
+import ru.medovik.hack2026.api.service.risk.feature.RiskFeatureRegistry
 import ru.medovik.hack2026.api.service.settings.ModelSettingsService
 import ru.medovik.hack2026.api.service.settings.CalculationDateService
 import tools.jackson.databind.json.JsonMapper
@@ -256,7 +257,7 @@ class DashboardService(
         val factorScale = if (rawScore > 100.0) 100.0 / rawScore else 1.0
         val factors = positive.map { feature ->
             ClientFactor(
-                id = reasonId(feature.code),
+                id = featureKey(feature.code),
                 label = feature.explanation,
                 points = feature.contribution * factorScale,
             )
@@ -447,7 +448,7 @@ class DashboardService(
                 reason = reasonId?.let { reasonLabel(it) },
                 factors = leadingFactors.map { feature ->
                     ScoreFactor(
-                        id = reasonId(feature.code),
+                        id = featureKey(feature.code),
                         label = factorLabel(code = feature.code, risk = risk),
                         points = feature.contribution.coerceIn(0.0, 100.0),
                     )
@@ -557,6 +558,10 @@ class DashboardService(
 
     private fun euros(cents: Long): BigDecimal =
         BigDecimal.valueOf(cents, 2).setScale(2, RoundingMode.HALF_UP)
+
+    private fun featureKey(code: String): String =
+        RiskFeatureRegistry.byCode[code]?.definition?.key
+            ?: code.lowercase()
 
     private fun reasonId(code: String): String = when (code) {
         "F1" -> "no-auto-renew"
