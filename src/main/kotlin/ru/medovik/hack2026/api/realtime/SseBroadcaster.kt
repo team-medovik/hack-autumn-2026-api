@@ -56,7 +56,9 @@ class SseBroadcaster {
             emitter.send(event)
         } catch (exception: IOException) {
             emitters -= emitter
-            runCatching { emitter.completeWithError(exception) }
+            // The servlet container dispatches I/O failures and completes the async request.
+            // Calling completeWithError here would dispatch the same failure again.
+            logger.debug("SSE client disconnected", exception)
         } catch (exception: RuntimeException) {
             emitters -= emitter
             runCatching { emitter.completeWithError(exception) }

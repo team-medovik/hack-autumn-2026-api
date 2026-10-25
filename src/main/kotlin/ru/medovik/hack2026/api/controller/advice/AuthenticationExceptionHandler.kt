@@ -8,6 +8,8 @@ import org.springframework.http.converter.HttpMessageNotReadableException
 import org.springframework.web.bind.MissingRequestCookieException
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.RestControllerAdvice
+import org.springframework.web.context.request.async.AsyncRequestNotUsableException
+import org.springframework.web.util.DisconnectedClientHelper
 import ru.medovik.hack2026.api.dto.response.common.ApiErrorResponse
 import ru.medovik.hack2026.api.exception.AuthenticationException
 import ru.medovik.hack2026.api.exception.UserAlreadyExistsException
@@ -168,7 +170,14 @@ class AuthenticationExceptionHandler {
     fun unexpected(
         exception: Exception,
         request: HttpServletRequest,
-    ): ResponseEntity<ApiErrorResponse> {
+    ): ResponseEntity<ApiErrorResponse>? {
+        if (exception is AsyncRequestNotUsableException ||
+            DisconnectedClientHelper.isClientDisconnectedException(exception)
+        ) {
+            // The response is no longer writable, including an already opened SSE stream.
+            logger.debug("API client disconnected: method={}, path={}", request.method, request.requestURI)
+            return null
+        }
         logger.error(
             "Unhandled API error: method={}, path={}",
             request.method,
