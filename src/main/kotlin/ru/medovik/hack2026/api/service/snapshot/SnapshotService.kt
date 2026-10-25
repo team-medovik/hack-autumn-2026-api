@@ -42,6 +42,8 @@ class SnapshotService(
 
     @Transactional
     fun upload(fileName: String, rawFile: ByteArray, uploadedBy: String): SnapshotRecord {
+        // Never log file contents: the source contains customer identifiers and billing data.
+        logger.info("Snapshot upload started: fileName={}, bytes={}, uploadedBy={}", fileName, rawFile.size, uploadedBy)
         if (rawFile.size > MAX_FILE_BYTES) throw SnapshotTooLargeException()
         require(fileName.isNotBlank() && fileName.length <= 255 &&
             !fileName.contains('/') && !fileName.contains('\\') &&
@@ -105,6 +107,10 @@ class SnapshotService(
         } catch (exception: Exception) {
             throw InvalidSnapshotException("Не удалось извлечь данные из JSON: ${exception.message ?: "неверный формат"}")
         }
+        logger.info(
+            "Snapshot validated and risk calculation completed: fileName={}, clients={}, services={}, transactions={}",
+            fileName, snapshot.accounts.size, snapshot.services.size, snapshot.transactions.size,
+        )
         val record = SnapshotRecord(
             id = "snapshot-${UUID.randomUUID()}",
             fileName = fileName,
@@ -113,7 +119,9 @@ class SnapshotService(
             clients = snapshot.accounts.size,
             services = snapshot.services.size,
         )
+        logger.info("Snapshot database insertion started: snapshotId={}, bytes={}", record.id, rawFile.size)
         repository.insert(record = record, payload = canonical, rawFile = rawFile)
+        logger.info("Snapshot database insertion executed: snapshotId={}; awaiting transaction commit", record.id)
         TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
             override fun afterCommit() {
                 logger.info(
