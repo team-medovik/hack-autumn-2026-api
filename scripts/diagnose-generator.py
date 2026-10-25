@@ -147,6 +147,39 @@ def main():
 main()
 '''
 
+API_DB_PROBE = r'''
+import json, sys
+import psycopg
+from psycopg.rows import dict_row
+
+request = json.load(sys.stdin)
+url = request["url"]
+if url.startswith("jdbc:"):
+    url = url[5:]
+result = {"apiStore": "generator_consumer"}
+try:
+    with psycopg.connect(url, user=request["user"], password=request["password"],
+            connect_timeout=10, row_factory=dict_row,
+            options="-c statement_timeout=10000 -c default_transaction_read_only=on") as connection:
+        row = connection.execute("""SELECT received_sequence, applied_sequence, published_sequence,
+            published_revision, published_at IS NOT NULL AS published, failure_count, last_error,
+            tail_complete, source_revision,
+            CASE WHEN published_projection IS NULL THEN NULL
+                 ELSE jsonb_array_length(published_projection->'accounts') END AS accounts,
+            CASE WHEN published_projection IS NULL THEN NULL
+                 ELSE jsonb_array_length(published_projection->'services') END AS services
+            FROM generator_consumers WHERE source_id=%s""", (request["source"],)).fetchone()
+    if row is None:
+        result["progress"] = "not_bound"
+    else:
+        error = row.pop("last_error")
+        row["last_error"] = error if error in (None, "FETCH_FAILED", "APPLY_FAILED") else "UNKNOWN"
+        result["progress"] = row
+except Exception:
+    result["progress"] = "read_failed"
+print(json.dumps(result, default=str))
+'''
+
 
 def command(args, data=None, timeout=15):
     try:
@@ -178,6 +211,7 @@ def main():
         print(json.dumps({"configuration": "invalid_base_url"}))
         return
     print(json.dumps({"enabled": env.get("APP_GENERATOR_ENABLED", "false") == "true",
+        "useForDashboardEnvironment": env.get("APP_GENERATOR_USE_FOR_DASHBOARD"),
         "baseHost": parsed.hostname, "basePort": parsed.port or (443 if parsed.scheme == "https" else 80),
         "tokenPresent": bool(token)}))
     api_networks = set(api["NetworkSettings"]["Networks"])
@@ -215,6 +249,22 @@ def main():
         print(output.strip() if output else json.dumps({"probe": "execution_failed"}))
     if not generators:
         print(json.dumps({"generatorApi": "container_not_found"}))
+    if generators:
+        database = {
+            "url": env.get("SPRING_DATASOURCE_URL", ""),
+            "user": env.get("SPRING_DATASOURCE_USERNAME", ""),
+            "password": env.get("SPRING_DATASOURCE_PASSWORD", ""),
+            "source": env.get("APP_GENERATOR_SOURCE_ID", "aeza-live"),
+        }
+        if all(database[key] for key in ("url", "user", "password")):
+            output = command(["docker", "run", "--rm", "--pull", "never", "-i", "--read-only",
+                "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
+                "--network", "container:" + API_CONTAINER, "--entrypoint", "python",
+                generators[0]["Config"]["Image"], "-B", "-c", API_DB_PROBE],
+                json.dumps(database), timeout=30)
+            print(output.strip() if output else json.dumps({"apiStore": "probe_failed"}))
+        else:
+            print(json.dumps({"apiStore": "database_configuration_missing"}))
     if ml_images:
         # Use an already installed Python image in the API's exact network namespace.
         # No host mounts, published ports, application writes or image downloads.
