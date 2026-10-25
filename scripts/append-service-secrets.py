@@ -37,13 +37,14 @@ def append_service_secrets(path, environ):
             if key in GENERATOR_BOOLEAN_KEYS and value not in ("true", "false"):
                 raise ValueError("Generator boolean overrides must be true or false")
             additions.append(f"{key}='{value}'\n")
-    # A non-secret repository variable can explicitly enable the consumer without
-    # replacing the existing secret JSON or changing the dashboard source.
-    enabled = environ.get("APP_GENERATOR_ENABLED", "")
-    if enabled != "":
-        if enabled not in ("true", "false"):
-            raise ValueError("APP_GENERATOR_ENABLED must be true or false")
-        additions.append(f"APP_GENERATOR_ENABLED='{enabled}'\n")
+    # Non-secret repository variables can explicitly select the live consumer and
+    # dashboard source without replacing the existing secret JSON.
+    for key in sorted(GENERATOR_BOOLEAN_KEYS):
+        value = environ.get(key, "")
+        if value != "":
+            if value not in ("true", "false"):
+                raise ValueError(f"{key} must be true or false")
+            additions.append(f"{key}='{value}'\n")
     for key in TOKEN_KEYS:
         value = environ.get(key, "")
         if not value:
