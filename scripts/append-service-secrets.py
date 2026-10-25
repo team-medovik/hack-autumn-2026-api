@@ -1,4 +1,4 @@
-"""Append service credentials without rewriting the existing deployment settings."""
+"""Append runtime overrides and credentials without rewriting existing settings."""
 import os
 import json
 from pathlib import Path
@@ -12,9 +12,13 @@ OVERRIDE_KEYS = {
     "APP_ML_CACHE_TTL", "APP_ML_MAX_HISTORY_EVENTS", "APP_AUTH_OIDC_ENABLED",
     "APP_AUTH_OIDC_AUTO_LINK_BY_EMAIL", "APP_AUTH_OIDC_ISSUER_URI", "APP_AUTH_OIDC_CLIENT_ID",
     "APP_AUTH_OIDC_CLIENT_SECRET", "APP_AUTH_OIDC_SUCCESS_REDIRECT_URI",
+    "APP_GENERATOR_ENABLED", "APP_GENERATOR_USE_FOR_DASHBOARD", "APP_GENERATOR_SOURCE_ID",
+    "APP_GENERATOR_BASE_URL", "APP_GENERATOR_POLL_DELAY_MS", "APP_GENERATOR_PAGE_SIZE",
+    "APP_GENERATOR_APPLY_BATCH_SIZE", "APP_GENERATOR_REQUEST_TIMEOUT",
 }
 
 TOKEN_KEYS = ("APP_ML_SERVICE_TOKEN", "APP_GENERATOR_SERVICE_TOKEN")
+GENERATOR_BOOLEAN_KEYS = {"APP_GENERATOR_ENABLED", "APP_GENERATOR_USE_FOR_DASHBOARD"}
 
 
 def append_service_secrets(path, environ):
@@ -30,7 +34,16 @@ def append_service_secrets(path, environ):
         for key, value in overrides.items():
             if not isinstance(value, str) or not value or any(c in value for c in "\r\n'\\"):
                 raise ValueError("API_RUNTIME_OVERRIDES contains an invalid single-line value")
+            if key in GENERATOR_BOOLEAN_KEYS and value not in ("true", "false"):
+                raise ValueError("Generator boolean overrides must be true or false")
             additions.append(f"{key}='{value}'\n")
+    # A non-secret repository variable can explicitly enable the consumer without
+    # replacing the existing secret JSON or changing the dashboard source.
+    enabled = environ.get("APP_GENERATOR_ENABLED", "")
+    if enabled != "":
+        if enabled not in ("true", "false"):
+            raise ValueError("APP_GENERATOR_ENABLED must be true or false")
+        additions.append(f"APP_GENERATOR_ENABLED='{enabled}'\n")
     for key in TOKEN_KEYS:
         value = environ.get(key, "")
         if not value:
