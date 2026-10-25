@@ -3,35 +3,43 @@ package ru.medovik.hack2026.api.contract
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
-import org.jooq.SQLDialect
-import org.jooq.impl.DSL
-import org.jooq.tools.jdbc.MockConnection
-import org.jooq.tools.jdbc.MockDataProvider
-import org.jooq.tools.jdbc.MockResult
+import org.jooq.DSLContext
 import ru.medovik.hack2026.api.dto.response.snapshot.SnapshotRecord
 import ru.medovik.hack2026.api.repository.dashboard.BillingSnapshotRepository
-import ru.medovik.hack2026.api.jooq.tables.references.BILLING_SNAPSHOTS
+import java.lang.reflect.Proxy
 import java.time.OffsetDateTime
 
 /**
- * Reproduces the statement submitted for a snapshot insert without requiring a live
- * PostgreSQL instance. Both date parameters must be explicitly cast to TIMESTAMPTZ:
- * raw DSLContext.execute() otherwise binds OffsetDateTime as VARCHAR in this project.
+ * Tests the SQL and bind arguments sent by BillingSnapshotRepository without
+ * relying on jOOQ's MockConnection update-count behavior. PostgreSQL requires
+ * both timestamp parameters in this raw SQL insert to be cast to TIMESTAMPTZ.
  */
 class SnapshotPersistenceSqlTest {
     @Test
     fun `snapshot insert casts both timestamps to prevent PostgreSQL varchar error`() {
-        var sql: String? = null
-        val result = DSL.using(SQLDialect.POSTGRES).newResult(BILLING_SNAPSHOTS.ID)
-        val connection = MockConnection(MockDataProvider { context ->
-            sql = context.sql()
-            arrayOf(MockResult(1, result))
-        })
-        val dsl = DSL.using(connection, SQLDialect.POSTGRES)
+        var capturedSql: String? = null
+        var capturedArgs: List<Any?>? = null
+
+        val dsl = Proxy.newProxyInstance(
+            DSLContext::class.java.classLoader,
+            arrayOf(DSLContext::class.java),
+        ) { _, method, args ->
+            if (method.name == "execute" && args?.getOrNull(0) is String) {
+                capturedSql = args[0] as String
+                val bindings = args.getOrNull(1) as? Array<*>
+                    ?: error("Expected a vararg array of SQL parameters")
+                capturedArgs = bindings.toList()
+                1 // A successful INSERT affects exactly one row.
+            } else {
+                error("Unexpected DSLContext method: ${method.name}")
+            }
+        } as DSLContext
+
+        val uploadedAt = OffsetDateTime.parse("2026-10-25T00:15:23Z")
         val record = SnapshotRecord(
             id = "snapshot-test",
             fileName = "data.json",
-            uploadedAt = OffsetDateTime.parse("2026-10-25T00:15:23Z"),
+            uploadedAt = uploadedAt,
             uploadedBy = "tester",
             clients = 1,
             services = 1,
@@ -43,9 +51,14 @@ class SnapshotPersistenceSqlTest {
             rawFile = "{}".toByteArray(Charsets.UTF_8),
         )
 
-        val statement = requireNotNull(sql) { "INSERT was not executed" }
+        val statement = requireNotNull(capturedSql) { "INSERT was not executed" }
         val cast = Regex("""cast\s*\(\s*\?\s+as\s+timestamptz\s*\)""", RegexOption.IGNORE_CASE)
         assertEquals(2, cast.findAll(statement).count(), statement)
         assertTrue(statement.contains("CAST(? AS jsonb)", ignoreCase = true), statement)
+
+        val values = requireNotNull(capturedArgs)
+        assertEquals(9, values.size, "Expected nine bound parameters")
+        assertEquals(uploadedAt, values[1], "taken_at must use the uploaded timestamp")
+        assertEquals(uploadedAt, values[2], "created_at must use the uploaded timestamp")
     }
 }
