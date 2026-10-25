@@ -24,11 +24,13 @@ class LocalOidcUserService(
             emailVerified = idToken.getClaimAsBoolean("email_verified") == true,
         )
         logger.info("OIDC login resolved: userId={}, provider={}", account.id, userRequest.clientRegistration.registrationId)
-        return DefaultOidcUser(
+        return object : DefaultOidcUser(
             setOf(SimpleGrantedAuthority("ROLE_${account.role}")),
             idToken,
             providerUser.userInfo,
-            "email",
-        )
+            "sub",
+        ) {
+            override fun getName(): String = requireNotNull(account.login)
+        }
     }
 }

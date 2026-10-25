@@ -60,21 +60,38 @@ class ExternalUsersEnvFile {
             .sorted()
             .map { index ->
                 val prefix = "USERS_${index}_"
+                val login = values["${prefix}LOGIN"] ?: requireNotNull(values["${prefix}EMAIL"]) {
+                    "Не задан ${prefix}LOGIN"
+                }
+                val password = values["${prefix}PASSWORD"]
+                require(password == null || password.isNotBlank()) { "Пустой ${prefix}PASSWORD" }
+                val oidcIssuer = values["${prefix}OIDC_ISSUER"]
+                val oidcSubject = values["${prefix}OIDC_SUBJECT"]
+                require((oidcIssuer == null) == (oidcSubject == null)) {
+                    "${prefix}OIDC_ISSUER и ${prefix}OIDC_SUBJECT нужно указывать вместе"
+                }
+                require((oidcIssuer == null || oidcIssuer.isNotBlank()) &&
+                    (oidcSubject == null || oidcSubject.isNotBlank())) {
+                    "OIDC issuer и subject не могут быть пустыми"
+                }
+                require(password != null || oidcSubject != null || '@' in login) {
+                    "Для SSO без пароля укажите OIDC issuer + subject либо email как login"
+                }
                 ExternalUserDefinition(
-                    login = values["${prefix}LOGIN"] ?: requireNotNull(values["${prefix}EMAIL"]) {
-                        "Не задан ${prefix}LOGIN"
-                    },
-                    password = requireNotNull(values["${prefix}PASSWORD"]) { "Не задан ${prefix}PASSWORD" },
+                    login = login,
+                    password = password,
                     role = values["${prefix}ROLE"]?.uppercase()?.let(AccountRole::valueOf)
                         ?: AccountRole.EMPLOYEE,
                     status = values["${prefix}STATUS"]?.uppercase()?.let(AccountStatus::valueOf)
                         ?: AccountStatus.ACTIVE,
+                    oidcIssuer = oidcIssuer,
+                    oidcSubject = oidcSubject,
                 )
             }
     }
 
     private companion object {
-        val USER_KEY = Regex("USERS_(\\d+)_(LOGIN|EMAIL|PASSWORD|ROLE|STATUS)")
+        val USER_KEY = Regex("USERS_(\\d+)_(LOGIN|EMAIL|PASSWORD|ROLE|STATUS|OIDC_ISSUER|OIDC_SUBJECT)")
         val USERS_FILE_PATHS = listOf(
             Path.of("/config/users.env"),
             Path.of("src/main/resources/users.env"),

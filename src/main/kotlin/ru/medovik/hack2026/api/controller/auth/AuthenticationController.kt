@@ -9,6 +9,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses
 import io.swagger.v3.oas.annotations.security.SecurityRequirement
 import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.servlet.http.HttpServletResponse
+import jakarta.servlet.http.HttpServletRequest
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.security.core.Authentication
@@ -105,8 +106,8 @@ class AuthenticationController(
             "остаётся действительным до окончания своего короткого срока жизни."
     )
     @ApiResponse(responseCode = "204", description = "Cookie refresh-токена удалена")
-    fun logout(response: HttpServletResponse): ResponseEntity<Void> {
-        authenticationService.logout(response)
+    fun logout(request: HttpServletRequest, response: HttpServletResponse): ResponseEntity<Void> {
+        authenticationService.logout(request, response)
         return ResponseEntity.status(HttpStatus.NO_CONTENT).build()
     }
 

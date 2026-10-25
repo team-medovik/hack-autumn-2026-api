@@ -1,10 +1,12 @@
 package ru.medovik.hack2026.api.service.auth
 
 import jakarta.servlet.http.HttpServletResponse
+import jakarta.servlet.http.HttpServletRequest
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpHeaders
 import org.springframework.http.ResponseCookie
 import org.springframework.security.crypto.password.PasswordEncoder
+import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.stereotype.Service
 import ru.medovik.hack2026.api.dto.request.auth.LoginRequest
 import ru.medovik.hack2026.api.dto.request.auth.ChangePasswordRequest
@@ -81,11 +83,19 @@ class AuthenticationService(
         )
     }
 
-    fun currentUser(login: String): CurrentUserResponse = accounts.findByLogin(login)
+    fun startOidcSession(login: String, response: HttpServletResponse) {
+        val account = accounts.findActiveByLogin(login.trim().lowercase())
+            ?: throw AuthenticationException("Учётная запись сотрудника не найдена или отключена")
+        issueRefreshCookie(account, response)
+    }
+
+    fun currentUser(login: String): CurrentUserResponse = accounts.findByLogin(login.trim().lowercase())
         ?.toResponse()
         ?: throw UserNotFoundException("Учётная запись сотрудника не найдена")
 
-    fun logout(response: HttpServletResponse) {
+    fun logout(request: HttpServletRequest, response: HttpServletResponse) {
+        request.getSession(false)?.invalidate()
+        SecurityContextHolder.clearContext()
         response.addHeader(
             HttpHeaders.SET_COOKIE,
             refreshCookie(
@@ -123,14 +133,18 @@ class AuthenticationService(
         account: UserAccounts,
         response: HttpServletResponse,
     ): AuthenticationResponse {
-        response.addHeader(
-            HttpHeaders.SET_COOKIE,
-            refreshCookie(token = jwtService.createRefreshToken(account)).toString(),
-        )
+        issueRefreshCookie(account, response)
         return AuthenticationResponse(
             accessToken = jwtService.createAccessToken(account),
             expiresIn = properties.accessTokenTtl.seconds,
             user = account.toResponse(),
+        )
+    }
+
+    private fun issueRefreshCookie(account: UserAccounts, response: HttpServletResponse) {
+        response.addHeader(
+            HttpHeaders.SET_COOKIE,
+            refreshCookie(token = jwtService.createRefreshToken(account)).toString(),
         )
     }
 

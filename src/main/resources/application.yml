@@ -18,8 +18,13 @@ app:
     secure-cookie: ${APP_AUTH_SECURE_COOKIE:false}
     oidc:
       enabled: ${APP_AUTH_OIDC_ENABLED:false}
+      auto-link-by-email: ${APP_AUTH_OIDC_AUTO_LINK_BY_EMAIL:false}
       success-redirect-uri: ${APP_AUTH_OIDC_SUCCESS_REDIRECT_URI:/}
-#      registrations: {}
+      registrations:
+        keycloak:
+          issuer-uri: ${APP_AUTH_OIDC_ISSUER_URI:}
+          client-id: ${APP_AUTH_OIDC_CLIENT_ID:}
+          client-secret: ${APP_AUTH_OIDC_CLIENT_SECRET:}
 
 springdoc:
   api-docs:

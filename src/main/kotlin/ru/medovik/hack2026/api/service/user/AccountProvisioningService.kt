@@ -11,6 +11,7 @@ import ru.medovik.hack2026.api.enumerable.account.AccountSource
 import ru.medovik.hack2026.api.exception.UserAlreadyExistsException
 import ru.medovik.hack2026.api.exception.UserDeletionForbiddenException
 import ru.medovik.hack2026.api.jooq.tables.pojos.UserAccounts
+import ru.medovik.hack2026.api.repository.auth.OidcIdentityRepository
 import ru.medovik.hack2026.api.repository.auth.UserAccountRepository
 import java.security.SecureRandom
 import java.time.OffsetDateTime
@@ -22,6 +23,7 @@ class AccountProvisioningService(
     private val repository: UserAccountRepository,
     private val passwordEncoder: PasswordEncoder,
     private val usersFile: ExternalUsersEnvFile,
+    private val identities: OidcIdentityRepository,
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
     private val secureRandom = SecureRandom()
@@ -107,7 +109,8 @@ class AccountProvisioningService(
         val login = AccountLogin.normalize(definition.login)
         val existing = repository.findByLogin(login)
         if (existing == null) {
-            repository.insert(definition.toAccount(login = login))
+            val account = repository.insert(definition.toAccount(login = login))
+            synchronizeOidcIdentity(account, definition)
             logger.info("User account created from env file: login={}, role={}", login, definition.role)
             return
         }
@@ -117,17 +120,33 @@ class AccountProvisioningService(
         }
         repository.updateManagedAccount(
             id = requireNotNull(existing.id),
-            passwordHash = requireNotNull(passwordEncoder.encode(definition.password)),
+            passwordHash = encodedPassword(definition.password),
             role = definition.role.name,
             status = definition.status.name,
         )
+        synchronizeOidcIdentity(existing, definition)
         logger.info("User account updated from env file: login={}", login)
+    }
+
+    private fun synchronizeOidcIdentity(account: UserAccounts, definition: ExternalUserDefinition) {
+        val issuer = definition.oidcIssuer ?: return
+        val subject = requireNotNull(definition.oidcSubject)
+        val accountId = requireNotNull(account.id)
+        val identity = identities.findByIssuerAndSubject(issuer, subject)
+        require(identity == null || identity.userAccountId == accountId) {
+            "OIDC-идентичность уже связана с другим пользователем"
+        }
+        val current = identities.findByUserAccountId(accountId)
+        when {
+            current == null -> identities.insert(accountId, issuer, subject)
+            current.issuer != issuer || current.subject != subject -> identities.update(accountId, issuer, subject)
+        }
     }
 
     private fun ExternalUserDefinition.toAccount(login: String) = UserAccounts(
         id = UUID.randomUUID(),
         login = login,
-        passwordHash = requireNotNull(passwordEncoder.encode(password)),
+        passwordHash = encodedPassword(password),
         role = role.name,
         status = status.name,
         provisioningSource = AccountSource.ENV_FILE.name,
@@ -136,4 +155,10 @@ class AccountProvisioningService(
         createdAt = OffsetDateTime.now(),
         updatedAt = OffsetDateTime.now(),
     )
+
+    private fun encodedPassword(password: String?): String {
+        val secret = password ?: ByteArray(32).also(secureRandom::nextBytes)
+            .let(Base64.getUrlEncoder().withoutPadding()::encodeToString)
+        return requireNotNull(passwordEncoder.encode(secret))
+    }
 }

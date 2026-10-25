@@ -42,4 +42,12 @@ class OidcIdentityRepository(
             .set(OIDC_IDENTITIES.CREATED_AT, DSL.currentOffsetDateTime())
             .execute()
     }
+
+    fun update(accountId: UUID, issuer: String, subject: String) {
+        check(dsl.update(OIDC_IDENTITIES)
+            .set(OIDC_IDENTITIES.ISSUER, issuer)
+            .set(OIDC_IDENTITIES.SUBJECT, subject)
+            .where(OIDC_IDENTITIES.USER_ACCOUNT_ID.eq(accountId))
+            .execute() == 1) { "Не удалось обновить OIDC-привязку" }
+    }
 }
