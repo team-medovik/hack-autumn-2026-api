@@ -5,6 +5,10 @@ import org.jooq.JSONB
 import org.jooq.Record
 import org.jooq.impl.DSL
 import org.springframework.stereotype.Repository
+import org.springframework.context.ApplicationEventPublisher
+import org.springframework.transaction.annotation.Transactional
+import ru.medovik.hack2026.api.realtime.EntityChangedEvent
+import ru.medovik.hack2026.api.realtime.RealtimeEntity
 import ru.medovik.hack2026.api.dto.request.risk.RiskSnapshot
 import ru.medovik.hack2026.api.repository.dashboard.StoredBillingSnapshot
 import tools.jackson.databind.json.JsonMapper
@@ -17,7 +21,8 @@ data class ConsumerProgress(
 )
 
 @Repository
-class GeneratorInbox(private val dsl: DSLContext, private val json: JsonMapper) {
+class GeneratorInbox(private val dsl: DSLContext, private val json: JsonMapper,
+    private val applicationEvents: ApplicationEventPublisher) {
     private val projector = BillingEventProjector()
 
     fun progress(source: String): ConsumerProgress? = dsl.fetchOne(
@@ -88,34 +93,50 @@ class GeneratorInbox(private val dsl: DSLContext, private val json: JsonMapper) 
     }
 
     /** Claim a whole ordered stream, not arbitrary events: a shared wallet requires ordering. */
-    fun applyNext(source: String, limit: Int = 1000): Int = dsl.transactionResult { config ->
-        require(limit in 1..1000)
-        val tx = DSL.using(config)
-        val row = tx.fetchOne("SELECT * FROM generator_consumers WHERE source_id = ? FOR UPDATE SKIP LOCKED", source)
-            ?: return@transactionResult 0
-        val run = row.get("run_id", String::class.java)
-        val applied = row.long("applied_sequence")
-        val pending = tx.fetch("SELECT sequence, payload FROM generator_inbox WHERE run_id = ? AND sequence > ? ORDER BY sequence LIMIT ?",
-            run, applied, limit)
-        pending.forEachIndexed { i, event -> check(event.long("sequence") == applied + i + 1) }
-        val projection = json.readValue(row.get("projection", JSONB::class.java).data(), RiskSnapshot::class.java)
-        val events = pending.map { json.readValue(it.get("payload", JSONB::class.java).data(), BillingEvent::class.java) }
-        val nextProjection = projector.apply(projection, events)
-        val next = applied + events.size
-        val encoded = json.writeValueAsString(nextProjection)
-        tx.execute("UPDATE generator_inbox SET applied_at = CURRENT_TIMESTAMP WHERE run_id = ? AND sequence > ? AND sequence <= ?",
-            run, applied, next)
-        tx.execute("""UPDATE generator_consumers SET projection = CAST(? AS jsonb), applied_sequence = ?, updated_at = CURRENT_TIMESTAMP
-            WHERE source_id = ?""", encoded, next, source)
-        if (events.isNotEmpty()) tx.execute("""UPDATE generator_consumers SET failure_count = 0,
-            last_error = NULL, retry_after = CURRENT_TIMESTAMP WHERE source_id = ?""", source)
-        // Never expose a partial page or clock beyond the events applied to that snapshot.
-        if (row.get("tail_complete", Boolean::class.java) && next == row.long("received_sequence")) {
-            tx.execute("""UPDATE generator_consumers SET published_projection = projection,
-                published_at = source_as_of, published_revision = source_revision,
-                published_sequence = applied_sequence WHERE source_id = ?""", source)
+    @Transactional
+    fun applyNext(source: String, limit: Int = 1000): Int {
+        val appliedAndPublished = dsl.transactionResult { config ->
+            require(limit in 1..1000)
+            val tx = DSL.using(config)
+            val row = tx.fetchOne("SELECT * FROM generator_consumers WHERE source_id = ? FOR UPDATE SKIP LOCKED", source)
+                ?: return@transactionResult (0 to null)
+            val run = row.get("run_id", String::class.java)
+            val applied = row.long("applied_sequence")
+            val pending = tx.fetch("SELECT sequence, payload FROM generator_inbox WHERE run_id = ? AND sequence > ? ORDER BY sequence LIMIT ?",
+                run, applied, limit)
+            pending.forEachIndexed { i, event -> check(event.long("sequence") == applied + i + 1) }
+            val projection = json.readValue(row.get("projection", JSONB::class.java).data(), RiskSnapshot::class.java)
+            val events = pending.map { json.readValue(it.get("payload", JSONB::class.java).data(), BillingEvent::class.java) }
+            val nextProjection = projector.apply(projection, events)
+            val next = applied + events.size
+            val encoded = json.writeValueAsString(nextProjection)
+            tx.execute("UPDATE generator_inbox SET applied_at = CURRENT_TIMESTAMP WHERE run_id = ? AND sequence > ? AND sequence <= ?",
+                run, applied, next)
+            tx.execute("""UPDATE generator_consumers SET projection = CAST(? AS jsonb), applied_sequence = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE source_id = ?""", encoded, next, source)
+            if (events.isNotEmpty()) tx.execute("""UPDATE generator_consumers SET failure_count = 0,
+                last_error = NULL, retry_after = CURRENT_TIMESTAMP WHERE source_id = ?""", source)
+            // Notify only a newly committed public projection, never a partially applied page.
+            val publicationChanged = row.get("tail_complete", Boolean::class.java) &&
+                next == row.long("received_sequence") &&
+                (row.get("published_revision", Long::class.java) != row.long("source_revision") ||
+                    row.get("published_at", OffsetDateTime::class.java) != row.get("source_as_of", OffsetDateTime::class.java) ||
+                    row.get("published_sequence", Long::class.java) != next)
+            val snapshotId = if (publicationChanged) {
+                tx.execute("""UPDATE generator_consumers SET published_projection = projection,
+                    published_at = source_as_of, published_revision = source_revision,
+                    published_sequence = applied_sequence WHERE source_id = ?""", source)
+                "generator:$run:${row.long("source_revision")}"
+            } else null
+            events.size to snapshotId
         }
-        events.size
+        // jOOQ has completed its transaction/savepoint. Under Spring, the existing
+        // SSE listener defers delivery until the enclosing transaction commits;
+        // without an outer Spring transaction, the jOOQ commit is already durable.
+        appliedAndPublished.second?.let {
+            applicationEvents.publishEvent(EntityChangedEvent(RealtimeEntity.SNAPSHOT, it))
+        }
+        return appliedAndPublished.first
     }
 
     fun failed(source: String, code: String) {
