@@ -402,7 +402,7 @@ class DashboardService(
             val result = riskEngine.calculate(
                 snapshot = payload,
                 settings = modelSettings.riskSettings(),
-                evaluationTime = calculationDate.evaluationTime(),
+                evaluationTime = if (stored.live) stored.takenAt.toInstant() else calculationDate.evaluationTime(),
             )
             return LoadedSnapshot(stored = stored, payload = payload, risk = result)
         } catch (exception: Exception) {
@@ -546,6 +546,7 @@ class DashboardService(
         val amount = BigDecimal.valueOf(cents)
         val monthlyCents = when (term) {
             PaymentTerm.HOUR -> amount.multiply(BigDecimal.valueOf(720))
+            PaymentTerm.DAY -> amount.multiply(BigDecimal.valueOf(30))
             PaymentTerm.WEEK -> amount.multiply(BigDecimal.valueOf(30))
                 .divide(BigDecimal.valueOf(7), 4, RoundingMode.HALF_UP)
             PaymentTerm.MONTH -> amount

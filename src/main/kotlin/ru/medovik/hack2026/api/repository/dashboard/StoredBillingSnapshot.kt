@@ -6,4 +6,5 @@ data class StoredBillingSnapshot(
     val id: String,
     val takenAt: OffsetDateTime,
     val payload: String,
+    val live: Boolean = false,
 )

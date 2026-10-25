@@ -1,0 +1,5 @@
+# Combine with the ML repository's compose.generator.yaml to reach the API backend network.
+networks:
+  generator-internal:
+    external: true
+    name: backend

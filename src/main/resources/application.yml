@@ -10,6 +10,16 @@ spring:
 app:
   dashboard:
     metrics-refresh-ms: 5000
+  generator:
+    enabled: ${APP_GENERATOR_ENABLED:false}
+    use-for-dashboard: ${APP_GENERATOR_USE_FOR_DASHBOARD:false}
+    source-id: ${APP_GENERATOR_SOURCE_ID:aeza-live}
+    base-url: ${APP_GENERATOR_BASE_URL:http://generator-api:8000}
+    service-token: ${APP_GENERATOR_SERVICE_TOKEN:}
+    poll-delay-ms: ${APP_GENERATOR_POLL_DELAY_MS:1000}
+    page-size: ${APP_GENERATOR_PAGE_SIZE:100}
+    apply-batch-size: ${APP_GENERATOR_APPLY_BATCH_SIZE:1000}
+    request-timeout: ${APP_GENERATOR_REQUEST_TIMEOUT:10s}
   auth:
     # 256-битный ключ в Base64. В каждом окружении переопределяйте через APP_AUTH_JWT_SECRET.
     jwt-secret: ${APP_AUTH_JWT_SECRET:ZGV2ZWxvcG1lbnQtb25seS1qd3Qtc2VjcmV0LW11c3QtYmUtYXQtbGVhc3QtMzItYnl0ZXM=}

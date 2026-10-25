@@ -5,9 +5,10 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.boot.runApplication
 import org.springframework.scheduling.annotation.EnableScheduling
 import ru.medovik.hack2026.api.properties.AuthProperties
+import ru.medovik.hack2026.api.properties.GeneratorProperties
 
 @SpringBootApplication
-@EnableConfigurationProperties(AuthProperties::class)
+@EnableConfigurationProperties(AuthProperties::class, GeneratorProperties::class)
 @EnableScheduling
 class Hack2026Application
 
