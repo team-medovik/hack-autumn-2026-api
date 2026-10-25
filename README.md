@@ -186,6 +186,52 @@ USERS_1_OIDC_SUBJECT='user-id-из-keycloak'
 
 По умолчанию APP_AUTH_OIDC_AUTO_LINK_BY_EMAIL=false: вход разрешён только для заранее привязанной пары issuer + sub. При true можно привязать существующую активную учётную запись по совпадающему email-логину, только если провайдер передал email_verified=true. Локальный вход по паролю остаётся доступен при включённом OIDC.
 
+## Межсервисные секреты GitHub Actions
+
+`ENV_PRODUCTION` остаётся основным набором настроек API. Его значение не нужно
+перезаписывать при создании токенов. В API добавлены отдельные repository Secrets:
+
+| Secret API | Совпадающий Secret ML-репозитория | Назначение |
+|---|---|---|
+| `APP_ML_SERVICE_TOKEN` | `ML_SERVICE_TOKEN` | Авторизация API в модели |
+| `APP_GENERATOR_SERVICE_TOKEN` | `GENERATOR_SERVICE_TOKEN` | Чтение событий генератора |
+
+При последующем деплое workflow дописывает только заданные токены в серверный `.env`.
+Без `API_RUNTIME_OVERRIDES` остальные настройки сохраняются; с ним меняются только
+явно переданные параметры (см. ниже).
+Пустой отдельный Secret не стирает существующий токен из `ENV_PRODUCTION`. Значения
+не выводятся в логи. Эти токены не заменяют JWT сотрудников или пароль PostgreSQL.
+
+Само создание Secrets не запускает деплой. Код интеграции поставляется отдельным
+[PR #42](https://github.com/team-medovik/hack-autumn-2026-api/pull/42).
+Для его включения нужны `APP_ML_ENABLED=true`, `APP_GENERATOR_ENABLED=true`,
+`APP_GENERATOR_USE_FOR_DASHBOARD=true`, адреса `http://ml-service:8000` и
+`http://generator-api:8000` в сети `backend` и согласованная версия модели.
+Существующие значения этих параметров эта настройка токенов не изменяет.
+ML workflow использует `ML_SERVICE_TOKEN`; запуск генератора ведётся отдельно и
+должен передавать `GENERATOR_SERVICE_TOKEN` из Secrets в окружение generator-api.
+
+
+### Дополнение настроек API без потери ENV_PRODUCTION
+
+Repository Secret `API_RUNTIME_OVERRIDES` — JSON-объект со строковыми значениями
+настроек Spring/PostgreSQL, JWT, OIDC и `APP_ML_*`. Он содержит согласованные
+оператором значения; сам JSON с паролями в репозитории не хранится.
+
+Порядок при следующем деплое:
+
+1. Берётся прежний `ENV_PRODUCTION` целиком.
+2. Настройки, явно указанные в `API_RUNTIME_OVERRIDES`, перекрывают одноимённые ключи.
+   Остальные поля остаются прежними.
+3. `APP_ML_SERVICE_TOKEN` и `APP_GENERATOR_SERVICE_TOKEN` берутся из отдельных Secrets.
+4. Workflow сохраняет обязательные `SPRING_PROFILES_ACTIVE=prod` и `USERS_ENV_DIR`.
+
+`API_RUNTIME_OVERRIDES` не нужен ML-контейнеру. Там используется отдельный Secret
+`ML_SERVICE_TOKEN`; пароль PostgreSQL API, JWT и Keycloak модели не передаются.
+Пароль БД в конфигурации не меняет пароль роли на сервере. Создание Secrets не
+включает сервисы до деплоя соответствующего кода. Флаги генератора это дополнение
+не меняет; они остаются под управлением исходного `ENV_PRODUCTION`.
+
 ## Как связаны сервисы
 
 ```text
