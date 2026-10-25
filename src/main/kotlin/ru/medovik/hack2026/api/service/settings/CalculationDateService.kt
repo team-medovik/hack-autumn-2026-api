@@ -1,6 +1,7 @@
 package ru.medovik.hack2026.api.service.settings
 
 import org.slf4j.LoggerFactory
+import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.transaction.support.TransactionSynchronization
@@ -9,6 +10,8 @@ import ru.medovik.hack2026.api.dto.request.risk.RiskSnapshot
 import ru.medovik.hack2026.api.dto.settings.CalculationDate
 import ru.medovik.hack2026.api.repository.dashboard.BillingSnapshotRepository
 import ru.medovik.hack2026.api.repository.settings.CalculationDateRepository
+import ru.medovik.hack2026.api.realtime.EntityChangedEvent
+import ru.medovik.hack2026.api.realtime.RealtimeEntity
 import ru.medovik.hack2026.api.service.risk.RiskEngine
 import tools.jackson.databind.json.JsonMapper
 import java.time.Instant
@@ -20,6 +23,7 @@ class CalculationDateService(
     private val snapshots: BillingSnapshotRepository,
     private val modelSettings: ModelSettingsService,
     private val jsonMapper: JsonMapper,
+    private val events: ApplicationEventPublisher,
 ) {
     private val riskEngine = RiskEngine()
     private val logger = LoggerFactory.getLogger(javaClass)
@@ -44,6 +48,7 @@ class CalculationDateService(
             )
         }
         repository.save(normalized)
+        events.publishEvent(EntityChangedEvent(RealtimeEntity.CALCULATION_DATE))
         TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
             override fun afterCommit() {
                 logger.info(

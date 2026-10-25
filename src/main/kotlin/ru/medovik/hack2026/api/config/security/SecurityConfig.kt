@@ -1,5 +1,6 @@
 package ru.medovik.hack2026.api.config.security
 
+import jakarta.servlet.DispatcherType
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.security.config.annotation.web.builders.HttpSecurity
@@ -45,12 +46,13 @@ class SecurityConfig {
         }
         http.sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED) }
         http.authorizeHttpRequests {
-            it.requestMatchers(
-                "/api/v1/auth/login",
-                "/api/v1/auth/refresh",
-                "/api/v1/auth/logout",
-                "/api/v1/auth/oidc/**",
-            ).permitAll()
+            it.dispatcherTypeMatchers(DispatcherType.ASYNC, DispatcherType.ERROR).permitAll()
+                .requestMatchers(
+                    "/api/v1/auth/login",
+                    "/api/v1/auth/refresh",
+                    "/api/v1/auth/logout",
+                    "/api/v1/auth/oidc/**",
+                ).permitAll()
                 .requestMatchers(
                     "/oauth2/**",
                     "/login/oauth2/**",

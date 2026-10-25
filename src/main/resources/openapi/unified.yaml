@@ -47,6 +47,8 @@ tags:
   description: Смена пароля
 - name: Пользователи
   description: Управление сотрудниками с ролью ADMIN
+- name: События
+  description: Уведомления об изменении данных в реальном времени
 security: &id001
 - bearerAuth: []
 paths:
@@ -655,6 +657,28 @@ paths:
         '403': *id010
         '404': *id008
         '409': *id011
+  /api/v1/events:
+    get:
+      tags:
+      - События
+      operationId: getEvents
+      summary: Получать уведомления об изменениях
+      description: 'SSE-поток для авторизованного пользователя. Событие entity-changed содержит
+        JSON по схеме EntityChangedEvent; после события клиент повторно запрашивает нужные данные
+        обычным GET. Сервер отправляет комментарий :ping каждые 20 секунд и закрывает поток
+        через 15 минут для повторного подключения с новым access-токеном. История событий
+        по Last-Event-ID не воспроизводится.'
+      security: *id001
+      responses:
+        '200':
+          description: Поток событий с Content-Type text/event-stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                description: 'Кадры с полями id, event: entity-changed и data: EntityChangedEvent'
+              example: "id:1\nevent:entity-changed\ndata:{\"entity\":\"MODEL_SETTINGS\",\"id\":null}\n\n"
+        '401': *id002
 components:
   securitySchemes:
     bearerAuth:
@@ -663,6 +687,27 @@ components:
       bearerFormat: JWT
       description: JWT access token из POST /api/v1/auth/login
   schemas:
+    RealtimeEntity:
+      type: string
+      enum:
+      - MODEL_SETTINGS
+      - CALCULATION_DATE
+      - SNAPSHOT
+      - ADMIN_USERS
+    EntityChangedEvent:
+      type: object
+      additionalProperties: false
+      required:
+      - entity
+      - id
+      properties:
+        entity:
+          $ref: '#/components/schemas/RealtimeEntity'
+        id:
+          type:
+          - string
+          - 'null'
+          description: Идентификатор снимка или UUID сотрудника; для настроек null
     ApiErrorResponse:
       type: object
       description: Стандартный формат ошибки API.

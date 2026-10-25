@@ -1,6 +1,7 @@
 package ru.medovik.hack2026.api.service.snapshot
 
 import org.slf4j.LoggerFactory
+import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.transaction.support.TransactionSynchronization
@@ -9,6 +10,8 @@ import ru.medovik.hack2026.api.dto.request.risk.RiskSnapshot
 import ru.medovik.hack2026.api.dto.response.snapshot.SnapshotRecord
 import ru.medovik.hack2026.api.exception.InvalidSnapshotException
 import ru.medovik.hack2026.api.repository.dashboard.BillingSnapshotRepository
+import ru.medovik.hack2026.api.realtime.EntityChangedEvent
+import ru.medovik.hack2026.api.realtime.RealtimeEntity
 import ru.medovik.hack2026.api.service.risk.RiskEngine
 import ru.medovik.hack2026.api.service.settings.CalculationDateService
 import ru.medovik.hack2026.api.service.settings.ModelSettingsService
@@ -26,6 +29,7 @@ class SnapshotService(
     private val dates: CalculationDateService,
     private val modelSettings: ModelSettingsService,
     private val jsonMapper: JsonMapper,
+    private val events: ApplicationEventPublisher,
 ) {
     private val riskEngine = RiskEngine()
     private val logger = LoggerFactory.getLogger(javaClass)
@@ -121,6 +125,7 @@ class SnapshotService(
         )
         logger.info("Snapshot database insertion started: snapshotId={}, bytes={}", record.id, rawFile.size)
         repository.insert(record = record, payload = canonical, rawFile = rawFile)
+        events.publishEvent(EntityChangedEvent(RealtimeEntity.SNAPSHOT, record.id))
         logger.info("Snapshot database insertion executed: snapshotId={}; awaiting transaction commit", record.id)
         TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
             override fun afterCommit() {
