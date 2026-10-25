@@ -18,6 +18,7 @@ app:
     secure-cookie: ${APP_AUTH_SECURE_COOKIE:false}
     oidc:
       enabled: ${APP_AUTH_OIDC_ENABLED:false}
+      provider: keycloak
       auto-link-by-email: ${APP_AUTH_OIDC_AUTO_LINK_BY_EMAIL:false}
       success-redirect-uri: ${APP_AUTH_OIDC_SUCCESS_REDIRECT_URI:/}
       registrations:

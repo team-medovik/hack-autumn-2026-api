@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice
 import ru.medovik.hack2026.api.dto.response.common.ApiErrorResponse
 import ru.medovik.hack2026.api.exception.AuthenticationException
 import ru.medovik.hack2026.api.exception.UserAlreadyExistsException
+import ru.medovik.hack2026.api.exception.OidcIdentityAlreadyExistsException
 import ru.medovik.hack2026.api.exception.UserDeletionForbiddenException
 import ru.medovik.hack2026.api.exception.UserNotFoundException
 import ru.medovik.hack2026.api.exception.ModelSettingsConflictException
@@ -27,8 +28,8 @@ class AuthenticationExceptionHandler {
 
     @ExceptionHandler(InvalidSnapshotException::class)
     fun invalidSnapshot(exception: InvalidSnapshotException, request: HttpServletRequest) = error(
-        status = HttpStatus.UNPROCESSABLE_ENTITY,
-        code = "UNPROCESSABLE_ENTITY",
+        status = HttpStatus.UNPROCESSABLE_CONTENT,
+        code = "UNPROCESSABLE_CONTENT",
         message = exception.message ?: "Некорректный файл снимка",
         request = request,
     )
@@ -51,7 +52,7 @@ class AuthenticationExceptionHandler {
 
     @ExceptionHandler(WeakPasswordException::class)
     fun weakPassword(exception: WeakPasswordException, request: HttpServletRequest) = error(
-        status = HttpStatus.UNPROCESSABLE_ENTITY,
+        status = HttpStatus.UNPROCESSABLE_CONTENT,
         code = "WEAK_PASSWORD",
         message = exception.message ?: "Пароль не соответствует требованиям",
         request = request,
@@ -82,8 +83,8 @@ class AuthenticationExceptionHandler {
 
     @ExceptionHandler(InvalidModelSettingsException::class)
     fun invalidModelSettings(exception: InvalidModelSettingsException, request: HttpServletRequest) = error(
-        status = HttpStatus.UNPROCESSABLE_ENTITY,
-        code = "UNPROCESSABLE_ENTITY",
+        status = HttpStatus.UNPROCESSABLE_CONTENT,
+        code = "UNPROCESSABLE_CONTENT",
         message = exception.message ?: "Некорректные параметры модели",
         request = request,
     )
@@ -93,11 +94,11 @@ class AuthenticationExceptionHandler {
         status = if (request.requestURI in setOf(
                 "/api/v1/settings/model", "/api/v1/model/settings", "/api/v1/source/snapshot", "/api/v1/settings/calculation-date", "/api/v1/snapshots"
             )) {
-            HttpStatus.UNPROCESSABLE_ENTITY
+            HttpStatus.UNPROCESSABLE_CONTENT
         } else HttpStatus.BAD_REQUEST,
         code = if (request.requestURI in setOf(
                 "/api/v1/settings/model", "/api/v1/model/settings", "/api/v1/source/snapshot", "/api/v1/settings/calculation-date", "/api/v1/snapshots"
-            )) "UNPROCESSABLE_ENTITY" else "INVALID_REQUEST",
+            )) "UNPROCESSABLE_CONTENT" else "INVALID_REQUEST",
         message = "Некорректное тело запроса",
         request = request,
     )
@@ -121,6 +122,14 @@ class AuthenticationExceptionHandler {
         request = request,
     )
 
+    @ExceptionHandler(OidcIdentityAlreadyExistsException::class)
+    fun oidcIdentityAlreadyExists(exception: OidcIdentityAlreadyExistsException, request: HttpServletRequest) = error(
+        status = HttpStatus.CONFLICT,
+        code = "OIDC_IDENTITY_ALREADY_EXISTS",
+        message = exception.message ?: "SSO-пользователь уже привязан",
+        request = request,
+    )
+
     @ExceptionHandler(UserDeletionForbiddenException::class)
     fun userDeletionForbidden(exception: UserDeletionForbiddenException, request: HttpServletRequest) = error(
         status = HttpStatus.CONFLICT,
@@ -135,10 +144,10 @@ class AuthenticationExceptionHandler {
         request: HttpServletRequest,
     ) = error(
         status = if (request.requestURI == "/api/v1/settings/calculation-date") {
-            HttpStatus.UNPROCESSABLE_ENTITY
+            HttpStatus.UNPROCESSABLE_CONTENT
         } else HttpStatus.BAD_REQUEST,
         code = if (request.requestURI == "/api/v1/settings/calculation-date") {
-            "UNPROCESSABLE_ENTITY"
+            "UNPROCESSABLE_CONTENT"
         } else "INVALID_REQUEST",
         message = exception.message ?: "Некорректный запрос",
         request = request,

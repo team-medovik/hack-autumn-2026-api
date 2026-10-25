@@ -608,6 +608,7 @@ paths:
       - Пользователи
       operationId: createAdminUser
       summary: Создать сотрудника с временным паролем
+      description: Необязательный ssoUserId привязывает OIDC sub из выбранного в конфигурации провайдера. Временный пароль создаётся и возвращается как раньше.
       security: *id001
       requestBody:
         required: true
@@ -787,6 +788,12 @@ components:
           - DISABLED
           example: ACTIVE
           default: ACTIVE
+        ssoUserId:
+          type: string
+          description: Необязательный User ID пользователя в выбранном SSO-провайдере (OIDC sub), не Client ID приложения.
+          example: 0ba7a3fd-6fd8-48cd-a60b-2e8fd82d56e2
+          minLength: 1
+          maxLength: 2048
       required:
       - login
     CreatedUserResponse:
