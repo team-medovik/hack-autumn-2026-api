@@ -1,6 +1,7 @@
 package ru.medovik.hack2026.api.service.settings
 
 import org.slf4j.LoggerFactory
+import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.transaction.support.TransactionSynchronization
@@ -20,6 +21,8 @@ import ru.medovik.hack2026.api.exception.ModelSettingsConflictException
 import ru.medovik.hack2026.api.repository.dashboard.BillingSnapshotRepository
 import ru.medovik.hack2026.api.repository.settings.ModelSettingsRepository
 import ru.medovik.hack2026.api.repository.settings.CalculationDateRepository
+import ru.medovik.hack2026.api.realtime.EntityChangedEvent
+import ru.medovik.hack2026.api.realtime.RealtimeEntity
 import ru.medovik.hack2026.api.service.risk.RiskEngine
 import tools.jackson.databind.json.JsonMapper
 import java.time.OffsetDateTime
@@ -32,6 +35,7 @@ class ModelSettingsService(
     private val snapshots: BillingSnapshotRepository,
     private val jsonMapper: JsonMapper,
     private val calculationDate: CalculationDateRepository,
+    private val events: ApplicationEventPublisher,
 ) {
     private val riskEngine = RiskEngine()
     private val logger = LoggerFactory.getLogger(javaClass)
@@ -77,6 +81,7 @@ class ModelSettingsService(
             values = request.values,
         )
         repository.insert(version = version, updatedAt = updatedAt, updatedBy = updatedBy, values = request.values)
+        events.publishEvent(EntityChangedEvent(RealtimeEntity.MODEL_SETTINGS))
         TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
             override fun afterCommit() {
                 logger.info(

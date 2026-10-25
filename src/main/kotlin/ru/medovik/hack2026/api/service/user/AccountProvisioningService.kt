@@ -2,6 +2,7 @@ package ru.medovik.hack2026.api.service.user
 
 import org.jooq.exception.DataAccessException
 import org.slf4j.LoggerFactory
+import org.springframework.context.ApplicationEventPublisher
 import org.springframework.dao.DuplicateKeyException
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.security.crypto.password.PasswordEncoder
@@ -16,6 +17,8 @@ import ru.medovik.hack2026.api.jooq.tables.pojos.UserAccounts
 import ru.medovik.hack2026.api.properties.AuthProperties
 import ru.medovik.hack2026.api.repository.auth.OidcIdentityRepository
 import ru.medovik.hack2026.api.repository.auth.UserAccountRepository
+import ru.medovik.hack2026.api.realtime.EntityChangedEvent
+import ru.medovik.hack2026.api.realtime.RealtimeEntity
 import java.security.SecureRandom
 import java.time.OffsetDateTime
 import java.util.Base64
@@ -28,6 +31,7 @@ class AccountProvisioningService(
     private val usersFile: ExternalUsersEnvFile,
     private val identities: OidcIdentityRepository,
     private val properties: AuthProperties,
+    private val events: ApplicationEventPublisher,
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
     private val secureRandom = SecureRandom()
@@ -110,6 +114,7 @@ class AccountProvisioningService(
             ssoIdentity != null,
             actorLogin,
         )
+        events.publishEvent(EntityChangedEvent(RealtimeEntity.ADMIN_USERS, requireNotNull(account.id).toString()))
         return CreatedUser(account, temporaryPassword)
     }
 
@@ -133,6 +138,7 @@ class AccountProvisioningService(
             )
         }
         check(repository.deleteById(id) == 1) { "Не удалось удалить учётную запись пользователя" }
+        events.publishEvent(EntityChangedEvent(RealtimeEntity.ADMIN_USERS, id.toString()))
         logger.info("User account deleted from admin panel: id={}, login={}, actor={}", id, account.login, actorLogin)
     }
 
