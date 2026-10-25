@@ -5,7 +5,6 @@ import ru.medovik.hack2026.api.dto.settings.FeatureDefinition
 import ru.medovik.hack2026.api.service.risk.feature.impl.AwaitingRenewal
 import ru.medovik.hack2026.api.service.risk.feature.impl.AwaitingRenewalWithoutFunds
 import ru.medovik.hack2026.api.service.risk.feature.impl.BonusesExceedMoney
-import ru.medovik.hack2026.api.service.risk.feature.impl.ExpiryWithAutoRenew
 import ru.medovik.hack2026.api.service.risk.feature.impl.ExpiryWithoutAutoRenew
 import ru.medovik.hack2026.api.service.risk.feature.impl.InsufficientFunds
 import ru.medovik.hack2026.api.service.risk.feature.impl.SuspendedService
@@ -21,14 +20,14 @@ object RiskFeatureRegistry {
             70,
         ),
         RegisteredRiskFeature(
-            InsufficientFunds(),
-            FeatureDefinition("insufficientFunds", "Не хватает средств на продление", "Средств на счёте недостаточно для продлений в горизонте прогноза."),
-            40,
-        ),
-        RegisteredRiskFeature(
             ExpiryWithoutAutoRenew(),
             FeatureDefinition("expiringWithoutAutoRenewal", "Истекает без автопродления", "Срок услуги истекает в горизонте прогноза, а автопродление отключено."),
             50,
+        ),
+        RegisteredRiskFeature(
+            InsufficientFunds(),
+            FeatureDefinition("insufficientFunds", "Не хватает средств на продление", "Средств на счёте недостаточно для продлений в горизонте прогноза."),
+            40,
         ),
         RegisteredRiskFeature(
             AwaitingRenewalWithoutFunds(),
@@ -44,11 +43,6 @@ object RiskFeatureRegistry {
             BonusesExceedMoney(),
             FeatureDefinition("bonusesExceedMoney", "Бонусов больше денег", "Бонусный баланс превышает денежный баланс клиента."),
             10,
-        ),
-        RegisteredRiskFeature(
-            ExpiryWithAutoRenew(),
-            FeatureDefinition("expiringWithAutoRenewal", "Истекает с автопродлением", "Тут и по названию понятно."),
-            0,
         ),
     )
 
