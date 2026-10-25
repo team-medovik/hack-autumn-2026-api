@@ -22,7 +22,7 @@ app:
     max-history-events: ${APP_ML_MAX_HISTORY_EVENTS:100000}
   generator:
     enabled: ${APP_GENERATOR_ENABLED:false}
-    use-for-dashboard: ${APP_GENERATOR_USE_FOR_DASHBOARD:false}
+    use-for-dashboard: true
     source-id: ${APP_GENERATOR_SOURCE_ID:aeza-live}
     base-url: ${APP_GENERATOR_BASE_URL:http://generator-api:8000}
     service-token: ${APP_GENERATOR_SERVICE_TOKEN:}
