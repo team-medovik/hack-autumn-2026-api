@@ -8,10 +8,14 @@ import ru.medovik.hack2026.api.jooq.tables.records.BillingSnapshotsRecord
 import java.time.DayOfWeek
 import java.time.ZoneOffset
 import java.time.temporal.TemporalAdjusters
+import ru.medovik.hack2026.api.service.generator.GeneratorInbox
+import ru.medovik.hack2026.api.properties.GeneratorProperties
 
 @Repository
 class BillingSnapshotRepository(
     private val dsl: DSLContext,
+    private val generator: GeneratorInbox,
+    private val generatorProperties: GeneratorProperties,
 ) {
     fun listRecords(): List<SnapshotRecord> = dsl.selectFrom(BILLING_SNAPSHOTS)
         .orderBy(
@@ -56,7 +60,9 @@ class BillingSnapshotRepository(
             rawFile,
         ) == 1) { "Не удалось сохранить снимок" }
     }
-    fun findLatest(): StoredBillingSnapshot? = dsl
+    fun findLatest(): StoredBillingSnapshot? = if (generatorProperties.useForDashboard) {
+        generator.published(generatorProperties.sourceId)
+    } else dsl
         .selectFrom(BILLING_SNAPSHOTS)
         .orderBy(
             BILLING_SNAPSHOTS.CREATED_AT.desc(),
@@ -68,6 +74,7 @@ class BillingSnapshotRepository(
         ?.toStored()
 
     fun findDashboardHistory(): List<StoredBillingSnapshot> {
+        if (generatorProperties.useForDashboard) return listOfNotNull(findLatest())
         val latest = findLatest() ?: return emptyList()
         val firstWeek = latest.takenAt.toInstant().atZone(ZoneOffset.UTC).toLocalDate()
             .with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))

@@ -1,0 +1,5 @@
+# Use with the ML repository's compose.ml.yaml after creating the API backend network.
+networks:
+  ml-internal:
+    external: true
+    name: backend
