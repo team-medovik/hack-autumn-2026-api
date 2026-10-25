@@ -17,6 +17,7 @@ class OidcConfiguration {
 
         require(properties.oidc.registrations.isNotEmpty()) { "OIDC включён, но провайдеры не настроены" }
         val registrations = properties.oidc.registrations.map { (registrationId, source) ->
+            require(source.issuerUri.isNotBlank()) { "Не задан issuer-uri для OIDC-провайдера $registrationId" }
             require(source.clientId.isNotBlank()) { "Не задан client-id для OIDC-провайдера $registrationId" }
             require(!source.clientSecret.isNullOrBlank()) {
                 "Не задан client-secret для OIDC-провайдера $registrationId"

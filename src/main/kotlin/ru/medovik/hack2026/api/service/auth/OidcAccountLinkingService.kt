@@ -6,6 +6,7 @@ import org.springframework.security.access.AccessDeniedException
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import ru.medovik.hack2026.api.jooq.tables.pojos.UserAccounts
+import ru.medovik.hack2026.api.properties.AuthProperties
 import ru.medovik.hack2026.api.repository.auth.OidcIdentityRepository
 import ru.medovik.hack2026.api.repository.auth.UserAccountRepository
 import ru.medovik.hack2026.api.service.user.AccountProvisioningService
@@ -15,6 +16,7 @@ class OidcAccountLinkingService(
     private val accounts: UserAccountRepository,
     private val identities: OidcIdentityRepository,
     private val provisioning: AccountProvisioningService,
+    private val properties: AuthProperties,
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
 
@@ -31,6 +33,9 @@ class OidcAccountLinkingService(
             subject = subject,
         )?.let { identity ->
             return accounts.findById(identity.userAccountId).activeOrDenied()
+        }
+        if (!properties.oidc.autoLinkByEmail) {
+            throw AccessDeniedException("OIDC-идентичность не привязана к учётной записи")
         }
         if (email.isNullOrBlank() || !emailVerified) {
             throw AccessDeniedException("OIDC-провайдер не подтвердил email")

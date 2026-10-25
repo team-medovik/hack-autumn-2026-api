@@ -11,6 +11,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository
 import ru.medovik.hack2026.api.config.oidc.OidcIntegrationPaths
 import ru.medovik.hack2026.api.properties.AuthProperties
+import ru.medovik.hack2026.api.service.auth.AuthenticationService
 import ru.medovik.hack2026.api.service.auth.LocalOidcUserService
 
 @Configuration
@@ -25,6 +26,7 @@ class SecurityConfig {
         apiAuthenticationEntryPoint: ApiAuthenticationEntryPoint,
         apiAccessDeniedHandler: ApiAccessDeniedHandler,
         localOidcUserService: LocalOidcUserService,
+        authenticationService: AuthenticationService,
         properties: AuthProperties,
     ): SecurityFilterChain {
         http.csrf {
@@ -79,7 +81,10 @@ class SecurityConfig {
             http.oauth2Login {
                 it.userInfoEndpoint { endpoint -> endpoint.oidcUserService(localOidcUserService) }
                     .redirectionEndpoint { endpoint -> endpoint.baseUri("${OidcIntegrationPaths.BASE}/*/callback") }
-                    .successHandler { _, response, _ -> response.sendRedirect(properties.oidc.successRedirectUri) }
+                    .successHandler { _, response, authentication ->
+                        authenticationService.startOidcSession(authentication.name, response)
+                        response.sendRedirect(properties.oidc.successRedirectUri)
+                    }
             }
         }
         return http
