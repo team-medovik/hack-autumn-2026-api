@@ -16,6 +16,8 @@ data class ModelSettings(
     val values: ModelSettingsValues,
     @field:Schema(description = "Заводские значения")
     val defaults: ModelSettingsValues,
+    @field:Schema(description = "Признаки риска в порядке показа")
+    val featureDefinitions: List<FeatureDefinition>,
     @field:Schema(description = "101 корзина для score от 0 до 100; без снимка все нули")
     val scoreHistogram: List<Int>,
 )

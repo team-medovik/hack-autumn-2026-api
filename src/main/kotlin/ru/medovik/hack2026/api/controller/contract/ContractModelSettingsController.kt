@@ -3,6 +3,7 @@ package ru.medovik.hack2026.api.controller.contract
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.security.SecurityRequirement
 import io.swagger.v3.oas.annotations.tags.Tag
+import org.slf4j.LoggerFactory
 import org.springframework.security.core.Authentication
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PatchMapping
@@ -21,40 +22,36 @@ class ContractModelSettingsController(
     private val service: ModelSettingsService,
     private val jsonMapper: JsonMapper,
 ) {
+    private val logger = LoggerFactory.getLogger(javaClass)
+
     @GetMapping("/api/v1/model/settings")
     @Operation(operationId = "getRiskModelSettings", summary = "Получить действующие настройки модели")
     fun get(): ModelSettings = service.get()
 
-    /**
-     * OpenAPI forbids unknown top-level keys, but permits additional nested keys.
-     * Newly registered factor weights must be integer values in 0..100.
-     */
+    /** OpenAPI forbids unknown top-level keys; registered weights are validated by the service. */
     @PatchMapping("/api/v1/model/settings")
     @Operation(operationId = "patchRiskModelSettings", summary = "Частично обновить параметры модели и пересчитать")
     fun patch(
         @RequestBody payload: Map<String, Any?>,
         authentication: Authentication,
     ): ModelSettings {
-        validatePatchPayload(payload)
-        val changes = requireMap(payload["changes"], "changes")
-        val weights = changes["factorWeights"]?.let { requireMap(it, "factorWeights") }
-        val extraWeights = weights.orEmpty()
-            .filterKeys { it !in ru.medovik.hack2026.api.dto.settings.FactorWeights.BUILTIN_KEYS }
-            .mapValues { (_, weight) -> (weight as Number).toInt() }
-        // Unknown factor keys are carried into FactorWeights.additionalWeights, not discarded.
-        val normalized = changes.toMutableMap()
-        if (weights != null) normalized["factorWeights"] = weights.filterKeys {
-            it in ru.medovik.hack2026.api.dto.settings.FactorWeights.BUILTIN_KEYS
+        logger.debug("Model settings PATCH received: version={}, updatedBy={}, groups={}",
+            payload["version"], authentication.name, (payload["changes"] as? Map<*, *>)?.keys)
+        try {
+            validatePatchPayload(payload)
+        } catch (exception: InvalidModelSettingsException) {
+            logger.warn("Model settings PATCH payload rejected: version={}, updatedBy={}, reason={}",
+                payload["version"], authentication.name, exception.message)
+            throw exception
         }
         val request = try {
-            val parsed = jsonMapper.readValue(
-                jsonMapper.writeValueAsString(payload + ("changes" to normalized)),
+            jsonMapper.readValue(
+                jsonMapper.writeValueAsString(payload),
                 PatchModelSettingsRequest::class.java,
             )
-            parsed.copy(changes = parsed.changes.copy(
-                factorWeights = parsed.changes.factorWeights?.copy(additionalWeights = extraWeights),
-            ))
-        } catch (_: Exception) {
+        } catch (exception: Exception) {
+            logger.warn("Model settings PATCH parsing failed: version={}, updatedBy={}",
+                payload["version"], authentication.name, exception)
             throw InvalidModelSettingsException("Не удалось разобрать изменения модели")
         }
         return service.patch(request = request, updatedBy = authentication.name)
@@ -113,10 +110,7 @@ class ContractModelSettingsController(
     private companion object {
         val BOOLEAN_FIELDS = setOf("bonusesAsMoney", "referralBalanceAsMoney")
         val GROUP_FIELDS = mapOf(
-            "factorWeights" to setOf(
-                "awaitingPayment", "expiringWithoutAutoRenewal", "insufficientFunds",
-                "awaitingPaymentWithoutFunds", "disabledByClient", "bonusesExceedMoney",
-            ),
+            "factorWeights" to emptySet<String>(),
             "riskThresholds" to setOf("medium", "high"),
             "finance" to setOf("bonusesAsMoney", "referralBalanceAsMoney", "balanceLossFactor"),
             "forecast" to setOf("horizonDays", "recalculationIntervalMinutes"),
