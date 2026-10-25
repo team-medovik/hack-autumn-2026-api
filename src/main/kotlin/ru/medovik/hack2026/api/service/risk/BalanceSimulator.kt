@@ -37,7 +37,14 @@ class BalanceSimulator {
             val covered = remaining >= service.price
             // An unsuccessful renewal does not consume the remaining balance.
             if (covered) remaining -= service.price
-            RenewalCoverage(service.id, service.expiresAt, service.price, before, covered, remaining)
+            RenewalCoverage(
+                serviceId = service.id,
+                renewalAt = service.expiresAt,
+                price = service.price,
+                fundsBefore = before,
+                covered = covered,
+                fundsAfter = remaining
+            )
         }
         val shortfall = (required - available).coerceAtLeast(0L)
         return FundingSummary(

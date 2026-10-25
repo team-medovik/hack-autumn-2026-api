@@ -444,10 +444,11 @@ paths:
       tags:
       - Мониторинг
       operationId: getRiskMetrics
-      summary: Prometheus-метрики по клиентам и ожидаемым потерям
-      description: ОБЯЗАТЕЛЬНО ПО ТЗ. Доступно Prometheus в защищённой внутренней сети/через allowlist; анонимный
-        публичный доступ снаружи закрывается reverse proxy. Обязательны churn_customers{level=...} и churn_expected_monthly_loss_eur.
-        Суммы должны совпадать с analytics/summary при одинаковой дате/версии данных.
+      summary: Только бизнес-метрики дашборда в формате Prometheus
+      description: Содержит метрики churn_* из общего реестра Micrometer без системных метрик.
+        Эти же ряды доступны вместе с системными метриками на /actuator/prometheus.
+        Обязательны churn_customers{level=...} и churn_expected_monthly_loss_eur.
+        Значения обновляются при расчёте дашборда и по расписанию.
       security: []
       responses:
         '200':
