@@ -1,6 +1,7 @@
 package ru.medovik.hack2026.api.service.dashboard
 
 import org.springframework.stereotype.Service
+import org.springframework.context.ApplicationEventPublisher
 import org.springframework.transaction.annotation.Isolation
 import org.springframework.transaction.annotation.Transactional
 import org.slf4j.LoggerFactory
@@ -56,6 +57,7 @@ class DashboardService(
     private val jsonMapper: JsonMapper,
     private val modelSettings: ModelSettingsService,
     private val calculationDate: CalculationDateService,
+    private val events: ApplicationEventPublisher,
 ) {
     private val riskEngine = RiskEngine()
     private val logger = LoggerFactory.getLogger(javaClass)
@@ -65,7 +67,7 @@ class DashboardService(
         val history = snapshots.findDashboardHistory()
         if (history.isEmpty()) {
             logger.debug("Dashboard requested without billing snapshots")
-            return emptyDashboard()
+            return emptyDashboard().also(events::publishEvent)
         }
 
         val current = load(history.first())
@@ -146,6 +148,7 @@ class DashboardService(
             response.lossReasons.size,
             response.churn.weeks.size,
         )
+        events.publishEvent(response)
         return response
     }
 

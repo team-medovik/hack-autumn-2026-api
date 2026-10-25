@@ -8,6 +8,8 @@ spring:
     default: dev
 
 app:
+  dashboard:
+    metrics-refresh-ms: 5000
   auth:
     # 256-битный ключ в Base64. В каждом окружении переопределяйте через APP_AUTH_JWT_SECRET.
     jwt-secret: ${APP_AUTH_JWT_SECRET:ZGV2ZWxvcG1lbnQtb25seS1qd3Qtc2VjcmV0LW11c3QtYmUtYXQtbGVhc3QtMzItYnl0ZXM=}
