@@ -1,5 +1,7 @@
 logging:
   config: 'classpath:log4j2.yml'
+  level:
+    ru.medovik: debug
 
 spring:
   application:
