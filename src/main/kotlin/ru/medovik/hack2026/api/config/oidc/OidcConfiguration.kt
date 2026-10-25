@@ -15,22 +15,25 @@ class OidcConfiguration {
     fun clientRegistrationRepository(properties: AuthProperties): ClientRegistrationRepository {
         if (!properties.oidc.enabled) return ClientRegistrationRepository { null }
 
-        require(properties.oidc.registrations.isNotEmpty()) { "OIDC включён, но провайдеры не настроены" }
-        val registrations = properties.oidc.registrations.map { (registrationId, source) ->
-            require(source.issuerUri.isNotBlank()) { "Не задан issuer-uri для OIDC-провайдера $registrationId" }
-            require(source.clientId.isNotBlank()) { "Не задан client-id для OIDC-провайдера $registrationId" }
-            require(!source.clientSecret.isNullOrBlank()) {
-                "Не задан client-secret для OIDC-провайдера $registrationId"
-            }
-            ClientRegistrations.fromIssuerLocation(source.issuerUri)
-                .registrationId(registrationId)
-                .clientId(source.clientId)
-                .clientSecret(source.clientSecret)
-                .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
-                .redirectUri("{baseUrl}${OidcIntegrationPaths.BASE}/{registrationId}/callback")
-                .scope(source.scopes)
-                .build()
+        val provider = requireNotNull(properties.oidc.provider?.takeIf(String::isNotBlank)) {
+            "Не задан app.auth.oidc.provider"
         }
-        return InMemoryClientRegistrationRepository(registrations)
+        val source = requireNotNull(properties.oidc.registrations[provider]) {
+            "Не настроен OIDC-провайдер $provider"
+        }
+        require(source.issuerUri.isNotBlank()) { "Не задан issuer-uri для OIDC-провайдера $provider" }
+        require(source.clientId.isNotBlank()) { "Не задан client-id для OIDC-провайдера $provider" }
+        require(!source.clientSecret.isNullOrBlank()) {
+            "Не задан client-secret для OIDC-провайдера $provider"
+        }
+        val registration = ClientRegistrations.fromIssuerLocation(source.issuerUri)
+            .registrationId(provider)
+            .clientId(source.clientId)
+            .clientSecret(source.clientSecret)
+            .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
+            .redirectUri("{baseUrl}${OidcIntegrationPaths.BASE}/{registrationId}/callback")
+            .scope(source.scopes)
+            .build()
+        return InMemoryClientRegistrationRepository(registration)
     }
 }

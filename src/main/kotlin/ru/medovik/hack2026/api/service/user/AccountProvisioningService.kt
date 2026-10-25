@@ -3,6 +3,7 @@ package ru.medovik.hack2026.api.service.user
 import org.jooq.exception.DataAccessException
 import org.slf4j.LoggerFactory
 import org.springframework.dao.DuplicateKeyException
+import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -10,7 +11,9 @@ import ru.medovik.hack2026.api.dto.request.admin.CreateUserRequest
 import ru.medovik.hack2026.api.enumerable.account.AccountSource
 import ru.medovik.hack2026.api.exception.UserAlreadyExistsException
 import ru.medovik.hack2026.api.exception.UserDeletionForbiddenException
+import ru.medovik.hack2026.api.exception.OidcIdentityAlreadyExistsException
 import ru.medovik.hack2026.api.jooq.tables.pojos.UserAccounts
+import ru.medovik.hack2026.api.properties.AuthProperties
 import ru.medovik.hack2026.api.repository.auth.OidcIdentityRepository
 import ru.medovik.hack2026.api.repository.auth.UserAccountRepository
 import java.security.SecureRandom
@@ -24,6 +27,7 @@ class AccountProvisioningService(
     private val passwordEncoder: PasswordEncoder,
     private val usersFile: ExternalUsersEnvFile,
     private val identities: OidcIdentityRepository,
+    private val properties: AuthProperties,
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
     private val secureRandom = SecureRandom()
@@ -42,10 +46,26 @@ class AccountProvisioningService(
         }
     }
 
+    @Transactional
     fun createByAdmin(request: CreateUserRequest, actorLogin: String): CreatedUser {
         val login = AccountLogin.normalize(request.login)
         if (repository.findByLogin(login) != null) {
             throw UserAlreadyExistsException("Пользователь с логином $login уже существует")
+        }
+        val ssoIdentity = request.ssoUserId?.trim()?.let { subject ->
+            require(subject.isNotEmpty() && subject.length <= 2048) {
+                "ssoUserId должен содержать от 1 до 2048 символов"
+            }
+            val provider = checkNotNull(properties.oidc.provider?.takeIf(String::isNotBlank)) {
+                "SSO-провайдер не выбран в конфигурации"
+            }
+            val issuer = checkNotNull(properties.oidc.registrations[provider]?.issuerUri?.takeIf(String::isNotBlank)) {
+                "Для SSO-провайдера $provider не задан issuer-uri"
+            }
+            if (identities.findByIssuerAndSubject(issuer, subject) != null) {
+                throw OidcIdentityAlreadyExistsException()
+            }
+            issuer to subject
         }
         val temporaryPassword = ByteArray(24).also(secureRandom::nextBytes)
             .let(Base64.getUrlEncoder().withoutPadding()::encodeToString)
@@ -72,11 +92,22 @@ class AccountProvisioningService(
             }
             throw exception
         }
+        ssoIdentity?.let { (issuer, subject) ->
+            try {
+                identities.insert(requireNotNull(account.id), issuer, subject)
+            } catch (_: DataIntegrityViolationException) {
+                throw OidcIdentityAlreadyExistsException()
+            } catch (exception: DataAccessException) {
+                if (exception.sqlState() == "23505") throw OidcIdentityAlreadyExistsException()
+                throw exception
+            }
+        }
         logger.info(
-            "User account created from admin panel: userId={}, login={}, role={}, actor={}",
+            "User account created from admin panel: userId={}, login={}, role={}, ssoLinked={}, actor={}",
             account.id,
             account.login,
             account.role,
+            ssoIdentity != null,
             actorLogin,
         )
         return CreatedUser(account, temporaryPassword)

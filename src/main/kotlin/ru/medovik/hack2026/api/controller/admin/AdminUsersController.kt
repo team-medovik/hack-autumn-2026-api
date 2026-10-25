@@ -63,7 +63,7 @@ class AdminUsersController(
         operationId = "createAdminUser",
         summary = "Создать сотрудника",
         description = "Генерирует временный пароль. Он возвращается только в ответе на создание; " +
-            "ответ запрещено кэшировать.",
+            "ответ запрещено кэшировать. Необязательный ssoUserId привязывает User ID из настроенного SSO-провайдера.",
     )
     @ApiResponses(
         ApiResponse(
@@ -88,7 +88,7 @@ class AdminUsersController(
         ),
         ApiResponse(
             responseCode = "409",
-            description = "Логин уже занят",
+            description = "Логин или SSO User ID уже занят",
             content = [Content(schema = Schema(implementation = ApiErrorResponse::class))],
         ),
     )

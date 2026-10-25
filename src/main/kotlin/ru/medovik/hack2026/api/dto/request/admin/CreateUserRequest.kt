@@ -14,4 +14,9 @@ data class CreateUserRequest(
     val role: AccountRole = AccountRole.EMPLOYEE,
     @field:Schema(description = "Статус учётной записи", allowableValues = ["ACTIVE", "DISABLED"], example = "ACTIVE")
     val status: AccountStatus = AccountStatus.ACTIVE,
+    @field:Schema(
+        description = "Необязательный User ID пользователя в настроенном SSO-провайдере (OIDC sub). Это не Client ID приложения.",
+        example = "0ba7a3fd-6fd8-48cd-a60b-2e8fd82d56e2",
+    )
+    val ssoUserId: String? = null,
 )
