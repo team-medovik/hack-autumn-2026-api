@@ -32,7 +32,7 @@ class ModelSettingsRepository(
 
     fun insert(version: Long, updatedAt: OffsetDateTime, updatedBy: String, values: ModelSettingsValues) {
         dsl.execute(
-            "INSERT INTO model_settings (version, updated_at, updated_by, payload) VALUES (?, ?, ?, CAST(? AS jsonb))",
+            "INSERT INTO model_settings (version, updated_at, updated_by, payload) VALUES (?, CAST(? AS timestamptz), ?, CAST(? AS jsonb))",
             version,
             updatedAt,
             updatedBy,
